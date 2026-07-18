@@ -6,6 +6,7 @@ non-zero if any catalog failed.
 """
 
 import os
+import re
 
 from catalogs import connect_catalog
 
@@ -15,6 +16,16 @@ URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
 
 # Known-broken catalogs: shown in the status table but don't fail the CI job.
 EXPECTED_FAILURES = {"horizon", "unity_managed"}
+
+
+def scrub(text):
+    """Redact secrets before printing an error: strip URL query strings (where
+    vended SAS tokens/signatures live) and mask any configured secret values."""
+    text = re.sub(r"\?[^\s'\"]+", "?<redacted>", text)
+    for key, val in os.environ.items():
+        if val and len(val) >= 8 and key not in ("CATALOGS", "PATH", "PWD"):
+            text = text.replace(val, f"<{key}>")
+    return text
 
 
 def write_demo(cat):
@@ -38,10 +49,9 @@ def main():
         try:
             n = write_demo(cat)
             results.append((cat, "ok", f"{n} rows"))
-        except Exception:
-            # Deliberately do NOT print the exception — error messages can carry
-            # vended tokens / storage URLs that GitHub's secret masking won't catch.
-            results.append((cat, "ERROR", ""))
+        except Exception as e:
+            # Show the reason, but scrub secrets/tokens first (see scrub()).
+            results.append((cat, "ERROR", scrub(str(e).splitlines()[0])[:220]))
 
     width = max(len(c) for c, _, _ in results)
     print()
