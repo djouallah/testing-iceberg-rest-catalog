@@ -8,4 +8,4 @@
 | unity external storage | ✅ | |
 | unity managed storage | ❌ | by design — no credential vending |
 | Snowflake Open Catalog (external storage) | ✅ | managed Apache Polaris |
-| Snowflake Horizon (managed storage) | ❌ | 403 on create-table — namespace must be an existing Snowflake `database.schema` (REST can't create `demo`) with `CREATE ICEBERG TABLE` + external-volume `USAGE`. Snowflake-side setup, not DuckDB |
+| Snowflake Horizon (managed storage) | ❌ | 403 on create-table — targets Snowflake DB `ICEBERG` / schema `demo`; that DB must be `CATALOG=SNOWFLAKE` + `EXTERNAL_VOLUME=SNOWFLAKE_MANAGED`, schema must exist (REST can't create it), and the role needs `CREATE ICEBERG TABLE`. Snowflake-side setup, not DuckDB |
