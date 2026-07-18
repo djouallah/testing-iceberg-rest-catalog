@@ -47,8 +47,14 @@ OIDC federation needs an Azure app registration that trusts this repo. Done manu
 Other catalogs (R2, S3 Tables, Polaris, Unity, Horizon) are stubbed out in `catalogs.py`.
 Add a `case` there and supply the secret manually (GitHub secret or `.env`, both gitignored).
 
-## Known issue
+## DuckDB 1.4.5 / OneLake gotchas
 
-The original notebook's OneLake write failed with `NotFound` on the metadata folder. If CI
-reproduces this, it's a warehouse/permission problem, not auth — fall back to a
-connect-and-list step to confirm the OIDC token and attach work before debugging the write.
+Three things differ from the 1.5.x notebook and are needed for the write to succeed:
+
+1. **ATTACH option name.** 1.4.5's iceberg extension uses `SUPPORT_STAGE_CREATE false`, not
+   `STAGE_CREATE_TABLES` / `SKIP_CREATE_TABLE_METADATA_UPDATES` (those are 1.5.x).
+2. **Separate storage credential.** The ATTACH `TOKEN` only authenticates the Iceberg REST
+   catalog API. Writing the parquet data files to `onelake.dfs.fabric.microsoft.com` needs its
+   own `TYPE azure, PROVIDER access_token` secret (created from the same OIDC token in `catalogs.py`).
+3. **CA bundle path.** The azure extension looks for `/etc/pki/tls/certs/ca-bundle.crt` (RHEL);
+   the workflow symlinks Ubuntu's `ca-certificates.crt` there so SSL to OneLake works.
