@@ -7,5 +7,5 @@
 | s3_table | ✅ | |
 | unity external storage | ✅ | |
 | unity managed storage | ❌ | by design — no credential vending |
-| polaris external storage | ✅ | |
-| horizon managed storage | ❌ | not sure why it's not working |
+| Snowflake Open Catalog (external storage) | ✅ | managed Apache Polaris |
+| Snowflake Horizon (managed storage) | ❌ | 403 on create-table — role needs CREATE/DML + USAGE privileges and vended-credentials; external write only GA'd May 2026 |
