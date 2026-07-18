@@ -36,8 +36,7 @@ def connect_catalog(cat):
                     TYPE iceberg,
                     ENDPOINT '{ONELAKE_ENDPOINT}',
                     TOKEN '{_onelake_token()}',
-                    STAGE_CREATE_TABLES false,
-                    SKIP_CREATE_TABLE_METADATA_UPDATES true
+                    SUPPORT_STAGE_CREATE false
                 );
             """)
 
