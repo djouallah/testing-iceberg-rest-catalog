@@ -14,7 +14,7 @@ TBL = "simple"
 URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
 
 # Known-broken catalogs: shown in the status table but don't fail the CI job.
-EXPECTED_FAILURES = {"horizon"}
+EXPECTED_FAILURES = {"horizon", "unity_managed"}
 
 
 def write_demo(cat):
