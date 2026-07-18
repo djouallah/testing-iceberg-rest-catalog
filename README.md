@@ -6,5 +6,6 @@
 | r2 | ✅ | |
 | s3_table | ✅ | |
 | unity external storage | ✅ | |
-| unity managed storage | ❌ | by design — no credential vending |
 | Snowflake Horizon (managed storage) | ✅ | |
+| unity managed storage | ❌ | by design — no credential vending |
+| google lakehouse | ❓ | configuration not documented / not sure |
