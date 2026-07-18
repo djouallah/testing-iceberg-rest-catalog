@@ -1,4 +1,4 @@
-# IRC — Iceberg REST catalog support (DuckDB)
+# Iceberg REST catalog write support (DuckDB)
 
 | Catalog | Status | Notes |
 | --- | :---: | --- |
