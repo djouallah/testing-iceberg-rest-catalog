@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        catalog: [r2, s3_table, unity, unity_managed, polaris, horizon]
+        catalog: [r2, s3_table, unity, unity_managed, horizon]
     steps:
       - uses: actions/checkout@v4
 
@@ -74,9 +74,5 @@ jobs:
           TABLEBUCKETARN: ${{ secrets.TABLEBUCKETARN }}
           UC_ENDPOINT: ${{ secrets.UC_ENDPOINT }}
           UC_TOKEN: ${{ secrets.UC_TOKEN }}
-          POLARIS_CLIENT: ${{ secrets.POLARIS_CLIENT }}
-          POLARIS_SECRET: ${{ secrets.POLARIS_SECRET }}
-          POLARIS_ENDPOINT: ${{ secrets.POLARIS_ENDPOINT }}
-          POLARIS_TOKEN_ENDPOINT: ${{ secrets.POLARIS_TOKEN_ENDPOINT }}
           HORIZON_TOKEN: ${{ secrets.HORIZON_TOKEN }}
           HORIZON_ENDPOINT: ${{ secrets.HORIZON_ENDPOINT }}

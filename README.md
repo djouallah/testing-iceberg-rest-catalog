@@ -7,5 +7,4 @@
 | s3_table | ✅ | |
 | unity external storage | ✅ | |
 | unity managed storage | ❌ | by design — no credential vending |
-| Snowflake Open Catalog (external storage) | ✅ | managed Apache Polaris |
 | Snowflake Horizon (managed storage) | ✅ | |

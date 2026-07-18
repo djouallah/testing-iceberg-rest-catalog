@@ -108,23 +108,6 @@ def connect_catalog(cat):
                 );
             """)
 
-        case "polaris":  # Snowflake Open Catalog (Polaris)
-            con.sql(f"""
-                CREATE OR REPLACE SECRET pol_secret (
-                    TYPE iceberg,
-                    CLIENT_ID '{os.environ["POLARIS_CLIENT"]}',
-                    CLIENT_SECRET '{os.environ["POLARIS_SECRET"]}',
-                    OAUTH2_SERVER_URI '{os.environ["POLARIS_TOKEN_ENDPOINT"]}',
-                    OAUTH2_SCOPE 'PRINCIPAL_ROLE:data_engineer'
-                );
-            """)
-            con.sql(f"""
-                ATTACH OR REPLACE 'dwh' AS cat_db (
-                    TYPE iceberg, ENDPOINT '{os.environ["POLARIS_ENDPOINT"]}',
-                    SECRET pol_secret, DEFAULT_REGION 'us-east-1'
-                );
-            """)
-
         case "horizon":  # Snowflake Horizon (managed storage)
             ep = os.environ["HORIZON_ENDPOINT"]
             con.sql(f"""
