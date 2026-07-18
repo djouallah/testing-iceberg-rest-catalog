@@ -28,4 +28,11 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # DuckDB's azure extension looks for the CA bundle at the RHEL path;
+      # symlink it to Ubuntu's so SSL to onelake.blob.fabric.microsoft.com works.
+      - name: Fix CA bundle path for Azure SDK
+        run: |
+          sudo mkdir -p /etc/pki/tls/certs
+          sudo ln -sf /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
+
       - run: python main.py
