@@ -1,26 +1,27 @@
 """Iceberg REST catalog connections for DuckDB.
 
-Starts with OneLake (Microsoft Fabric), authenticated via OIDC federation
-instead of a client secret. Other catalogs (R2, S3 Tables, Polaris, Unity,
-Horizon) get added below once their secrets are configured manually.
+OneLake runs on DuckDB 1.4.5 (1.5.4 has a OneLake bug), authenticated via OIDC
+federation. The other catalogs (R2, S3 Tables, Unity) run on DuckDB 1.5.4 and
+read their credentials from environment variables (GitHub Actions secrets).
 """
 
+import os
 import duckdb
-from azure.identity import DefaultAzureCredential
 
-# --- OneLake (Microsoft Fabric) ---------------------------------------------
+# --- OneLake (Microsoft Fabric) — DuckDB 1.4.5 ------------------------------
 ONELAKE_WAREHOUSE = "1c52481c-0523-4a5a-bbde-fdc932bd77c2/ac303243-4441-4885-9e7d-f4f5e7af194c"
 ONELAKE_ENDPOINT = "https://onelake.table.fabric.microsoft.com/iceberg"
 STORAGE_SCOPE = "https://storage.azure.com/.default"
 
+# --- S3 Tables (AWS) --------------------------------------------------------
+S3_TABLES_REGION = "ap-southeast-2"
+
 
 def _onelake_token():
-    """Storage token via OIDC federation.
+    """Storage token via OIDC federation (lazy import so non-OneLake jobs,
+    which don't install azure-identity, can import this module)."""
+    from azure.identity import DefaultAzureCredential
 
-    DefaultAzureCredential resolves the GitHub Actions federated token in CI
-    (through `azure/login` -> Azure CLI credential) or your `az login` session
-    locally. No client secret lives in the repo.
-    """
     return DefaultAzureCredential().get_token(STORAGE_SCOPE).token
 
 
@@ -30,12 +31,11 @@ def connect_catalog(cat):
     con.sql("INSTALL iceberg; LOAD iceberg;")
 
     match cat:
-        case "onelake":
+        case "onelake":  # DuckDB 1.4.5 only
             token = _onelake_token()  # one token for both the catalog API and storage
             con.sql("INSTALL azure; LOAD azure;")
             # Storage credential so DuckDB can write the parquet data files to
-            # OneLake (onelake.dfs.fabric.microsoft.com). The ATTACH TOKEN below
-            # only authenticates the Iceberg REST catalog API, not the filesystem.
+            # OneLake. The ATTACH TOKEN below only authenticates the catalog API.
             con.sql(f"""
                 CREATE OR REPLACE SECRET onelake_storage (
                     TYPE azure,
@@ -54,11 +54,48 @@ def connect_catalog(cat):
                 );
             """)
 
+        case "r2":  # Cloudflare R2 Data Catalog
+            wh = os.environ["R2_WAREHOUSE"]
+            ep = os.environ["ENDPOINT_R2"]
+            tok = os.environ["TOKEN_R2"]
+            con.sql(f"""
+                ATTACH OR REPLACE '{wh}' AS cat_db (
+                    TYPE iceberg, ENDPOINT '{ep}', TOKEN '{tok}'
+                );
+            """)
+
+        case "s3_table":  # AWS S3 Tables
+            con.sql(f"""
+                CREATE OR REPLACE SECRET s3_table (
+                    TYPE S3,
+                    KEY_ID '{os.environ["S3_KEY"]}',
+                    SECRET '{os.environ["S3_SECRET"]}',
+                    REGION '{S3_TABLES_REGION}'
+                );
+            """)
+            con.sql(f"""
+                ATTACH OR REPLACE '{os.environ["TABLEBUCKETARN"]}' AS cat_db (
+                    TYPE iceberg, ENDPOINT_TYPE s3_tables,
+                    STAGE_CREATE_TABLES false, SECRET s3_table
+                );
+            """)
+
+        case "unity":  # Databricks Unity Catalog (external storage, vended creds)
+            con.sql(f"""
+                CREATE OR REPLACE SECRET uc_secret (
+                    TYPE iceberg, TOKEN '{os.environ["UC_TOKEN"]}'
+                );
+            """)
+            con.sql(f"""
+                ATTACH OR REPLACE 'iceberg' AS cat_db (
+                    TYPE iceberg, SECRET uc_secret,
+                    ENDPOINT '{os.environ["UC_ENDPOINT"]}',
+                    ACCESS_DELEGATION_MODE 'vended_credentials'
+                );
+            """)
+
         # Add later, once secrets are configured manually:
-        #   case "r2":       ...
-        #   case "s3_table": ...
         #   case "polaris":  ...
-        #   case "unity":    ...
         #   case "horizon":  ...
 
         case _:

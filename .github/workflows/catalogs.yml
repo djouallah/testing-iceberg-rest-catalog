@@ -1,0 +1,65 @@
+name: catalogs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write   # required for OneLake OIDC federation
+  contents: read
+
+jobs:
+  # OneLake pins DuckDB 1.4.5 — 1.5.4 has a OneLake bug.
+  onelake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC federation)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install -r requirements-onelake.txt
+
+      # DuckDB's azure extension looks for the CA bundle at the RHEL path;
+      # symlink it to Ubuntu's so SSL to onelake.blob.fabric.microsoft.com works.
+      - name: Fix CA bundle path for Azure SDK
+        run: |
+          sudo mkdir -p /etc/pki/tls/certs
+          sudo ln -sf /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
+
+      - run: python main.py
+        env:
+          CATALOGS: onelake
+
+  # R2, S3 Tables, Unity run on DuckDB 1.5.4.
+  catalogs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install -r requirements.txt
+
+      - run: python main.py
+        env:
+          CATALOGS: r2,s3_table,unity
+          ENDPOINT_R2: ${{ secrets.ENDPOINT_R2 }}
+          TOKEN_R2: ${{ secrets.TOKEN_R2 }}
+          R2_WAREHOUSE: ${{ secrets.R2_WAREHOUSE }}
+          S3_KEY: ${{ secrets.S3_KEY }}
+          S3_SECRET: ${{ secrets.S3_SECRET }}
+          TABLEBUCKETARN: ${{ secrets.TABLEBUCKETARN }}
+          UC_ENDPOINT: ${{ secrets.UC_ENDPOINT }}
+          UC_TOKEN: ${{ secrets.UC_TOKEN }}
