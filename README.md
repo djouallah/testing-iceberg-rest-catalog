@@ -6,5 +6,5 @@
 | r2 | ✅ | |
 | s3_table | ✅ | |
 | unity external storage | ✅ | |
-| unity managed storage | ❌ | by design — no credential vending |
+| unity managed storage | ❌ | external engines can read but not write Databricks-managed storage (read-only vending) |
 | Snowflake Horizon (managed storage) | ✅ | |
