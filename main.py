@@ -51,7 +51,7 @@ def main():
             results.append((cat, "ok", f"{n} rows"))
         except Exception as e:
             # Show the reason, but scrub secrets/tokens first (see scrub()).
-            results.append((cat, "ERROR", scrub(str(e).splitlines()[0])[:220]))
+            results.append((cat, "ERROR", scrub(str(e).splitlines()[0])[:600]))
 
     width = max(len(c) for c, _, _ in results)
     print()
