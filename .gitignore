@@ -1,0 +1,13 @@
+# Reference notebook — kept local only, never committed
+*.ipynb
+.ipynb_checkpoints/
+
+# Secrets / env (catalog credentials added later)
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
