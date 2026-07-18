@@ -1,12 +1,11 @@
-"""Write a demo table to each catalog named in the CATALOGS env var.
+"""Write a demo table (demo.simple) to each catalog named in the CATALOGS env var.
 
-CATALOGS is a comma-separated list (default: onelake). Each catalog gets the
-same CSV written as `demo.simple`. Prints a per-catalog status table and exits
-non-zero if any catalog failed.
+CATALOGS is a comma-separated list (default: onelake). Prints a per-catalog
+ok/ERROR line and exits non-zero if a catalog that isn't an expected failure
+fails. Error details are intentionally not printed (avoid leaking secrets).
 """
 
 import os
-import re
 
 from catalogs import connect_catalog
 
@@ -14,18 +13,8 @@ DB = "demo"
 TBL = "simple"
 URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
 
-# Known-broken catalogs: shown in the status table but don't fail the CI job.
+# Known-broken catalogs: reported ERROR but don't fail the CI job.
 EXPECTED_FAILURES = {"unity_managed"}
-
-
-def scrub(text):
-    """Redact secrets before printing an error: strip URL query strings (where
-    vended SAS tokens/signatures live) and mask any configured secret values."""
-    text = re.sub(r"\?[^\s'\"]+", "?<redacted>", text)
-    for key, val in os.environ.items():
-        if val and len(val) >= 8 and key not in ("CATALOGS", "PATH", "PWD"):
-            text = text.replace(val, f"<{key}>")
-    return text
 
 
 def write_demo(cat):
@@ -49,9 +38,9 @@ def main():
         try:
             n = write_demo(cat)
             results.append((cat, "ok", f"{n} rows"))
-        except Exception as e:
-            # Show the reason, but scrub secrets/tokens first (see scrub()).
-            results.append((cat, "ERROR", scrub(str(e).splitlines()[0])[:600]))
+        except Exception:
+            # Errors intentionally not printed — they can carry vended tokens / URLs.
+            results.append((cat, "ERROR", ""))
 
     width = max(len(c) for c, _, _ in results)
     print()

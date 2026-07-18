@@ -8,4 +8,4 @@
 | unity external storage | ✅ | |
 | unity managed storage | ❌ | by design — no credential vending |
 | Snowflake Open Catalog (external storage) | ✅ | managed Apache Polaris |
-| Snowflake Horizon (managed storage) | ✅ | needs the DB set to `CATALOG=SNOWFLAKE` + `EXTERNAL_VOLUME=SNOWFLAKE_MANAGED`, the schema pre-created, and `CREATE ICEBERG TABLE` granted to the role |
+| Snowflake Horizon (managed storage) | ✅ | |

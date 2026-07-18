@@ -40,9 +40,14 @@ jobs:
         env:
           CATALOGS: onelake
 
-  # R2, S3 Tables, Unity run on DuckDB 1.5.4.
-  catalogs:
+  # One job per catalog (DuckDB 1.5.4) — re-run any single one independently.
+  catalog:
     runs-on: ubuntu-latest
+    name: ${{ matrix.catalog }}
+    strategy:
+      fail-fast: false
+      matrix:
+        catalog: [r2, s3_table, unity, unity_managed, polaris, horizon]
     steps:
       - uses: actions/checkout@v4
 
@@ -52,8 +57,7 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      # Unity's storage is Azure ADLS, so it uses DuckDB's azure extension —
-      # same CA bundle path fix as OneLake. Harmless for r2/s3 (not azure).
+      # Harmless for r2/s3/polaris; needed for the Azure-backed storage (unity).
       - name: Fix CA bundle path for Azure SDK
         run: |
           sudo mkdir -p /etc/pki/tls/certs
@@ -61,7 +65,7 @@ jobs:
 
       - run: python main.py
         env:
-          CATALOGS: r2,s3_table,unity,unity_managed,polaris,horizon
+          CATALOGS: ${{ matrix.catalog }}
           ENDPOINT_R2: ${{ secrets.ENDPOINT_R2 }}
           TOKEN_R2: ${{ secrets.TOKEN_R2 }}
           R2_WAREHOUSE: ${{ secrets.R2_WAREHOUSE }}
