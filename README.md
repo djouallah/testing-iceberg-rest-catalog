@@ -2,10 +2,10 @@
 
 | Catalog | Status | Notes |
 | --- | :---: | --- |
-| onelake | ✅ | private preview |
-| r2 | ✅ | |
-| s3_table | ✅ | |
-| unity external storage | ✅ | |
+| Microsoft OneLake | ✅ | private preview |
+| Cloudflare R2 | ✅ | |
+| AWS S3 Tables | ✅ | |
+| Databricks Unity (external storage) | ✅ | |
 | Snowflake Horizon (managed storage) | ✅ | |
-| unity managed storage | ❌ | by design — no credential vending |
-| google lakehouse | ❓ | configuration not documented / not sure |
+| Databricks Unity (managed storage) | ❌ | by design — no credential vending |
+| Google Lakehouse | ❓ | configuration not documented / not sure |
