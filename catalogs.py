@@ -31,11 +31,25 @@ def connect_catalog(cat):
 
     match cat:
         case "onelake":
+            token = _onelake_token()  # one token for both the catalog API and storage
+            con.sql("INSTALL azure; LOAD azure;")
+            # Storage credential so DuckDB can write the parquet data files to
+            # OneLake (onelake.dfs.fabric.microsoft.com). The ATTACH TOKEN below
+            # only authenticates the Iceberg REST catalog API, not the filesystem.
+            con.sql(f"""
+                CREATE OR REPLACE SECRET onelake_storage (
+                    TYPE azure,
+                    PROVIDER access_token,
+                    ACCESS_TOKEN '{token}',
+                    ACCOUNT_NAME 'onelake',
+                    ENDPOINT 'onelake.dfs.fabric.microsoft.com'
+                );
+            """)
             con.sql(f"""
                 ATTACH OR REPLACE '{ONELAKE_WAREHOUSE}' AS cat_db (
                     TYPE iceberg,
                     ENDPOINT '{ONELAKE_ENDPOINT}',
-                    TOKEN '{_onelake_token()}',
+                    TOKEN '{token}',
                     SUPPORT_STAGE_CREATE false
                 );
             """)
