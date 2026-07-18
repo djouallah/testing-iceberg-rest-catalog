@@ -38,13 +38,15 @@ def main():
         try:
             n = write_demo(cat)
             results.append((cat, "ok", f"{n} rows"))
-        except Exception as e:
-            results.append((cat, "ERROR", str(e).splitlines()[0][:160]))
+        except Exception:
+            # Deliberately do NOT print the exception — error messages can carry
+            # vended tokens / storage URLs that GitHub's secret masking won't catch.
+            results.append((cat, "ERROR", ""))
 
     width = max(len(c) for c, _, _ in results)
     print()
     for cat, status, detail in results:
-        print(f"{cat.ljust(width)}  {status:6}  {detail}")
+        print(f"{cat.ljust(width)}  {status:6}  {detail}".rstrip())
 
     unexpected = [c for c, status, _ in results if status == "ERROR" and c not in EXPECTED_FAILURES]
     if unexpected:
