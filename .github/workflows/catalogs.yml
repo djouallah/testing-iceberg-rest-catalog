@@ -52,6 +52,13 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # Unity's storage is Azure ADLS, so it uses DuckDB's azure extension —
+      # same CA bundle path fix as OneLake. Harmless for r2/s3 (not azure).
+      - name: Fix CA bundle path for Azure SDK
+        run: |
+          sudo mkdir -p /etc/pki/tls/certs
+          sudo ln -sf /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
+
       - run: python main.py
         env:
           CATALOGS: r2,s3_table,unity
