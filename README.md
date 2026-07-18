@@ -5,7 +5,7 @@
 | onelake | ✅ |
 | r2 | ✅ |
 | s3_table | ✅ |
-| unity | ✅ |
-| unity_managed | ❌ |
-| polaris | ✅ |
-| horizon | ❌ |
+| unity external storage | ✅ |
+| unity managed storage | ❌ |
+| polaris external storage | ✅ |
+| horizon managed storage | ❌ |
