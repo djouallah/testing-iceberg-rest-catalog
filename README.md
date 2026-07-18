@@ -2,7 +2,7 @@
 
 | Catalog | Status | Notes |
 | --- | :---: | --- |
-| onelake | ✅ | on 1.4.5 — 1.5.4 bug, fix ongoing |
+| onelake | ✅ | private preview |
 | r2 | ✅ | |
 | s3_table | ✅ | |
 | unity external storage | ✅ | |
