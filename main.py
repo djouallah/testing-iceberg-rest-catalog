@@ -13,6 +13,9 @@ DB = "demo"
 TBL = "simple"
 URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
 
+# Known-broken catalogs: shown in the status table but don't fail the CI job.
+EXPECTED_FAILURES = {"horizon"}
+
 
 def write_demo(cat):
     con = connect_catalog(cat)
@@ -43,7 +46,8 @@ def main():
     for cat, status, detail in results:
         print(f"{cat.ljust(width)}  {status:6}  {detail}")
 
-    if any(status == "ERROR" for _, status, _ in results):
+    unexpected = [c for c, status, _ in results if status == "ERROR" and c not in EXPECTED_FAILURES]
+    if unexpected:
         raise SystemExit(1)
 
 

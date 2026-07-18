@@ -61,7 +61,7 @@ jobs:
 
       - run: python main.py
         env:
-          CATALOGS: r2,s3_table,unity
+          CATALOGS: r2,s3_table,unity,unity_managed,polaris,horizon
           ENDPOINT_R2: ${{ secrets.ENDPOINT_R2 }}
           TOKEN_R2: ${{ secrets.TOKEN_R2 }}
           R2_WAREHOUSE: ${{ secrets.R2_WAREHOUSE }}
@@ -70,3 +70,9 @@ jobs:
           TABLEBUCKETARN: ${{ secrets.TABLEBUCKETARN }}
           UC_ENDPOINT: ${{ secrets.UC_ENDPOINT }}
           UC_TOKEN: ${{ secrets.UC_TOKEN }}
+          POLARIS_CLIENT: ${{ secrets.POLARIS_CLIENT }}
+          POLARIS_SECRET: ${{ secrets.POLARIS_SECRET }}
+          POLARIS_ENDPOINT: ${{ secrets.POLARIS_ENDPOINT }}
+          POLARIS_TOKEN_ENDPOINT: ${{ secrets.POLARIS_TOKEN_ENDPOINT }}
+          HORIZON_TOKEN: ${{ secrets.HORIZON_TOKEN }}
+          HORIZON_ENDPOINT: ${{ secrets.HORIZON_ENDPOINT }}

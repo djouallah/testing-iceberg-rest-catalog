@@ -94,9 +94,58 @@ def connect_catalog(cat):
                 );
             """)
 
-        # Add later, once secrets are configured manually:
-        #   case "polaris":  ...
-        #   case "horizon":  ...
+        case "unity_managed":  # Unity Catalog managed storage (serverless)
+            con.sql(f"""
+                CREATE OR REPLACE SECRET uc_secret (
+                    TYPE iceberg, TOKEN '{os.environ["UC_TOKEN"]}'
+                );
+            """)
+            con.sql(f"""
+                ATTACH OR REPLACE 'serverless' AS cat_db (
+                    TYPE iceberg, SECRET uc_secret,
+                    ENDPOINT '{os.environ["UC_ENDPOINT"]}',
+                    ACCESS_DELEGATION_MODE 'vended_credentials'
+                );
+            """)
+
+        case "polaris":  # Snowflake Open Catalog (Polaris)
+            con.sql(f"""
+                CREATE OR REPLACE SECRET pol_secret (
+                    TYPE iceberg,
+                    CLIENT_ID '{os.environ["POLARIS_CLIENT"]}',
+                    CLIENT_SECRET '{os.environ["POLARIS_SECRET"]}',
+                    OAUTH2_SERVER_URI '{os.environ["POLARIS_TOKEN_ENDPOINT"]}',
+                    OAUTH2_SCOPE 'PRINCIPAL_ROLE:data_engineer'
+                );
+            """)
+            con.sql(f"""
+                ATTACH OR REPLACE 'dwh' AS cat_db (
+                    TYPE iceberg, ENDPOINT '{os.environ["POLARIS_ENDPOINT"]}',
+                    SECRET pol_secret, DEFAULT_REGION 'us-east-1'
+                );
+            """)
+
+        case "horizon":  # Snowflake Horizon (managed storage)
+            ep = os.environ["HORIZON_ENDPOINT"]
+            con.sql(f"""
+                CREATE OR REPLACE SECRET horizon_secret (
+                    TYPE iceberg, CLIENT_ID '',
+                    CLIENT_SECRET '{os.environ["HORIZON_TOKEN"]}',
+                    OAUTH2_SERVER_URI '{ep}/v1/oauth/tokens',
+                    OAUTH2_GRANT_TYPE 'client_credentials',
+                    OAUTH2_SCOPE 'session:role:DATA_ENGINEER'
+                );
+            """)
+            con.sql(f"""
+                ATTACH OR REPLACE 'ICEBERG' AS cat_db (
+                    TYPE iceberg, SECRET horizon_secret, ENDPOINT '{ep}',
+                    SUPPORT_NESTED_NAMESPACES false,
+                    STAGE_CREATE_TABLES false,
+                    SKIP_CREATE_TABLE_METADATA_UPDATES true,
+                    REMOVE_FILES_ON_DELETE false,
+                    DISABLE_MULTI_TABLE_COMMIT true
+                );
+            """)
 
         case _:
             con.close()
