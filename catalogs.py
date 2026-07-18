@@ -139,6 +139,7 @@ def connect_catalog(cat):
             con.sql(f"""
                 ATTACH OR REPLACE 'ICEBERG' AS cat_db (
                     TYPE iceberg, SECRET horizon_secret, ENDPOINT '{ep}',
+                    ACCESS_DELEGATION_MODE 'vended_credentials',
                     SUPPORT_NESTED_NAMESPACES false,
                     STAGE_CREATE_TABLES false,
                     SKIP_CREATE_TABLE_METADATA_UPDATES true,
