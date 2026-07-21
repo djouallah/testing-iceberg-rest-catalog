@@ -1,14 +1,14 @@
 """Iceberg REST catalog connections for DuckDB.
 
-OneLake runs on DuckDB 1.4.5 (1.5.4 has a OneLake bug), authenticated via OIDC
-federation. The other catalogs (R2, S3 Tables, Unity) run on DuckDB 1.5.4 and
-read their credentials from environment variables (GitHub Actions secrets).
+Every catalog runs on DuckDB 1.5.4. OneLake authenticates via OIDC federation;
+the others (R2, S3 Tables, Unity, Horizon) read their credentials from
+environment variables (GitHub Actions secrets).
 """
 
 import os
 import duckdb
 
-# --- OneLake (Microsoft Fabric) — DuckDB 1.4.5 ------------------------------
+# --- OneLake (Microsoft Fabric) ---------------------------------------------
 ONELAKE_WAREHOUSE = "1c52481c-0523-4a5a-bbde-fdc932bd77c2/ac303243-4441-4885-9e7d-f4f5e7af194c"
 ONELAKE_ENDPOINT = "https://onelake.table.fabric.microsoft.com/iceberg"
 STORAGE_SCOPE = "https://storage.azure.com/.default"
@@ -18,8 +18,7 @@ S3_TABLES_REGION = "ap-southeast-2"
 
 
 def _onelake_token():
-    """Storage token via OIDC federation (lazy import so non-OneLake jobs,
-    which don't install azure-identity, can import this module)."""
+    """Storage token via OIDC federation."""
     from azure.identity import DefaultAzureCredential
 
     return DefaultAzureCredential().get_token(STORAGE_SCOPE).token
@@ -31,26 +30,27 @@ def connect_catalog(cat):
     con.sql("INSTALL iceberg; LOAD iceberg;")
 
     match cat:
-        case "onelake":  # DuckDB 1.4.5 only
+        case "onelake":  # Microsoft Fabric OneLake
             token = _onelake_token()  # one token for both the catalog API and storage
             con.sql("INSTALL azure; LOAD azure;")
-            # Storage credential so DuckDB can write the parquet data files to
-            # OneLake. The ATTACH TOKEN below only authenticates the catalog API.
-            con.sql(f"""
-                CREATE OR REPLACE SECRET onelake_storage (
-                    TYPE azure,
-                    PROVIDER access_token,
-                    ACCESS_TOKEN '{token}',
-                    ACCOUNT_NAME 'onelake',
-                    ENDPOINT 'onelake.dfs.fabric.microsoft.com'
-                );
-            """)
             con.sql(f"""
                 ATTACH OR REPLACE '{ONELAKE_WAREHOUSE}' AS cat_db (
                     TYPE iceberg,
                     ENDPOINT '{ONELAKE_ENDPOINT}',
                     TOKEN '{token}',
-                    SUPPORT_STAGE_CREATE false
+                    ACCESS_DELEGATION_MODE 'none',
+                    STAGE_CREATE_TABLES false,
+                    SKIP_CREATE_TABLE_METADATA_UPDATES true,
+                    DEFAULT_SCHEMA dbo
+                );
+            """)
+            # Storage credential so DuckDB can write the parquet data files to
+            # OneLake. The ATTACH TOKEN above only authenticates the catalog API.
+            con.sql(f"""
+                CREATE OR REPLACE SECRET onelake_storage (
+                    TYPE azure,
+                    PROVIDER access_token,
+                    ACCESS_TOKEN '{token}'
                 );
             """)
 

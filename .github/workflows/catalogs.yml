@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 jobs:
-  # Turn the dispatch choice (or a push = all) into the 1.5.4 matrix list.
+  # Turn the dispatch choice (or a push = all) into the matrix list.
   setup:
     runs-on: ubuntu-latest
     outputs:
@@ -34,45 +34,12 @@ jobs:
           target="${{ inputs.target }}"
           [ -z "$target" ] && target="all"
           if [ "$target" = "all" ]; then
-            echo 'catalogs=["r2","s3_table","unity","unity_managed","horizon"]' >> "$GITHUB_OUTPUT"
-          elif [ "$target" = "onelake" ]; then
-            echo 'catalogs=[]' >> "$GITHUB_OUTPUT"
+            echo 'catalogs=["onelake","r2","s3_table","unity","unity_managed","horizon"]' >> "$GITHUB_OUTPUT"
           else
             echo "catalogs=[\"$target\"]" >> "$GITHUB_OUTPUT"
           fi
 
-  # OneLake pins DuckDB 1.4.5 — 1.5.4 has a OneLake bug.
-  onelake:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'onelake' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Azure login (OIDC federation)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - run: pip install -r requirements-onelake.txt
-
-      # DuckDB's azure extension looks for the CA bundle at the RHEL path;
-      # symlink it to Ubuntu's so SSL to onelake.blob.fabric.microsoft.com works.
-      - name: Fix CA bundle path for Azure SDK
-        run: |
-          sudo mkdir -p /etc/pki/tls/certs
-          sudo ln -sf /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
-
-      - run: python main.py
-        env:
-          CATALOGS: onelake
-
-  # One job per selected catalog (DuckDB 1.5.4) — re-run any single one.
+  # One job per selected catalog — re-run any single one.
   catalog:
     needs: setup
     if: ${{ needs.setup.outputs.catalogs != '[]' }}
@@ -85,13 +52,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Azure login (OIDC federation)
+        if: matrix.catalog == 'onelake'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - run: pip install -r requirements.txt
 
-      # Harmless for r2/s3; needed for the Azure-backed storage (unity).
+      # DuckDB's azure extension looks for the CA bundle at the RHEL path;
+      # symlink it to Ubuntu's so SSL to the Azure-backed storage (onelake,
+      # unity) works. Harmless for r2/s3.
       - name: Fix CA bundle path for Azure SDK
         run: |
           sudo mkdir -p /etc/pki/tls/certs
