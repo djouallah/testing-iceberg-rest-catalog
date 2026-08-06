@@ -1,33 +1,32 @@
-"""Temporary: ask Glue itself what it thinks demo.simple is. Delete once solved."""
+"""Temporary: does the Glue commit land on the nightly (main) iceberg build?
 
-import json
-import os
+Usage: python debug_glue.py [stable|nightly]. Delete once solved.
+"""
 
-import boto3
+import sys
 
-glue = boto3.client(
-    "glue",
-    region_name=os.environ["GLUE_REGION"],
-    aws_access_key_id=os.environ["S3_KEY"],
-    aws_secret_access_key=os.environ["S3_SECRET"],
-)
+import duckdb
 
-db = glue.get_database(Name="demo")["Database"]
-print("database demo LocationUri:", db.get("LocationUri"), flush=True)
+from catalogs import connect_catalog, table_clause
 
-for name in ("simple", "probe_ins", "probe_ctas", "probe_lag"):
-    try:
-        t = glue.get_table(DatabaseName="demo", Name=name)["Table"]
-    except Exception as e:
-        print(f"\n{name}: FAILED -> {str(e)[:200]}", flush=True)
-        continue
-    params = t.get("Parameters", {})
-    sd = t.get("StorageDescriptor", {})
-    print(f"\n{name}:", flush=True)
-    print("  table_type        :", params.get("table_type"), flush=True)
-    print("  metadata_location :", params.get("metadata_location"), flush=True)
-    print("  sd.Location       :", sd.get("Location"), flush=True)
-    print("  columns           :", [c["Name"] for c in sd.get("Columns", [])][:5], flush=True)
-    print("  other params      :", json.dumps(
-        {k: v for k, v in params.items()
-         if k not in ("metadata_location", "table_type")})[:300], flush=True)
+channel = sys.argv[1] if len(sys.argv) > 1 else "stable"
+tbl = f"probe_{channel}"
+
+if channel == "nightly":
+    duckdb.connect().sql("FORCE INSTALL iceberg FROM core_nightly;")
+
+con = connect_catalog("glue")
+print("duckdb        :", duckdb.__version__, flush=True)
+print("iceberg ext   :", con.sql(
+    "SELECT extension_version FROM duckdb_extensions() WHERE extension_name='iceberg'"
+).fetchone()[0], flush=True)
+
+con.sql("USE cat_db.demo;")
+con.sql(f"DROP TABLE IF EXISTS {tbl};")
+con.sql(f"CREATE TABLE {tbl} (a INTEGER) {table_clause('glue', tbl)};")
+con.sql(f"INSERT INTO {tbl} VALUES (1),(2),(3);")
+print("count in-session:", con.sql(f"SELECT count(*) FROM {tbl}").fetchone()[0], flush=True)
+con.close()
+
+con2 = connect_catalog("glue")
+print("count on reattach:", con2.sql(f"SELECT count(*) FROM cat_db.demo.{tbl}").fetchone()[0], flush=True)
