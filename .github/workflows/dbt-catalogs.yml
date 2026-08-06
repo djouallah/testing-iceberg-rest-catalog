@@ -1,0 +1,110 @@
+name: dbt-catalogs
+
+# Run the fabric-dbt-benchmark dbt project verbatim against each Iceberg REST
+# catalog: clone it, point dbt at the local profile in dbt/, land a small AEMO
+# batch, dbt build. `all` runs the five working catalogs; glue stays selectable
+# but is blocked upstream (duckdb-iceberg#1299 — no table location from dbt).
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Catalog to run
+        type: choice
+        default: all
+        options:
+          - all
+          - onelake
+          - r2
+          - s3_table
+          - unity
+          - horizon
+          - glue
+      download_limit:
+        description: archives per source type (keep small)
+        default: "2"
+
+permissions:
+  id-token: write   # OneLake OIDC federation
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      catalogs: ${{ steps.pick.outputs.catalogs }}
+    steps:
+      - id: pick
+        run: |
+          target="${{ inputs.target }}"
+          [ -z "$target" ] && target="all"
+          if [ "$target" = "all" ]; then
+            echo 'catalogs=["onelake","r2","s3_table","unity","horizon"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "catalogs=[\"$target\"]" >> "$GITHUB_OUTPUT"
+          fi
+
+  dbt:
+    needs: setup
+    runs-on: ubuntu-latest
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.setup.outputs.catalogs) }}
+    env:
+      FILES_PATH: /tmp/landing
+      S3_KEY: ${{ secrets.S3_KEY }}
+      S3_SECRET: ${{ secrets.S3_SECRET }}
+      TABLEBUCKETARN: ${{ secrets.TABLEBUCKETARN }}
+      GLUE_WAREHOUSE: ${{ secrets.GLUE_WAREHOUSE }}
+      GLUE_REGION: ${{ secrets.GLUE_REGION }}
+      ENDPOINT_R2: ${{ secrets.ENDPOINT_R2 }}
+      TOKEN_R2: ${{ secrets.TOKEN_R2 }}
+      R2_WAREHOUSE: ${{ secrets.R2_WAREHOUSE }}
+      UC_ENDPOINT: ${{ secrets.UC_ENDPOINT }}
+      UC_TOKEN: ${{ secrets.UC_TOKEN }}
+      HORIZON_TOKEN: ${{ secrets.HORIZON_TOKEN }}
+      HORIZON_ENDPOINT: ${{ secrets.HORIZON_ENDPOINT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC federation)
+        if: matrix.target == 'onelake'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Mint OneLake storage token
+        if: matrix.target == 'onelake'
+        run: |
+          token=$(az account get-access-token --resource https://storage.azure.com --query accessToken -o tsv)
+          echo "::add-mask::$token"
+          echo "ONELAKE_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: git clone --depth 1 https://github.com/djouallah/fabric-dbt-benchmark bench
+      # duckrun brings dbt-duckdb + duckdb + deltalake at its own pins.
+      - run: pip install duckrun
+
+      # DuckDB's azure extension looks for the CA bundle at the RHEL path;
+      # symlink it to Ubuntu's so SSL to Azure-backed storage works.
+      - name: Fix CA bundle path for Azure SDK
+        run: |
+          sudo mkdir -p /etc/pki/tls/certs
+          sudo ln -sf /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
+
+      - name: land AEMO files
+        run: python bench/download_aemo.py
+        env:
+          download_limit: ${{ inputs.download_limit }}
+          daily_download_limit: ${{ inputs.download_limit }}
+
+      - name: dbt build --target ${{ matrix.target }}
+        run: |
+          dbt build --project-dir bench --profiles-dir "$GITHUB_WORKSPACE/dbt" --target ${{ matrix.target }} \
+            || dbt retry --project-dir bench --profiles-dir "$GITHUB_WORKSPACE/dbt" --target ${{ matrix.target }}

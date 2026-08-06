@@ -1,16 +1,138 @@
 # Local profile for running djouallah/fabric-dbt-benchmark verbatim against the
 # catalogs tested in this repo. Same profile name the project expects; switch
 # catalogs with `dbt build --target <name> --profiles-dir <this dir>`.
+# Each target mirrors the proven ATTACH in catalogs.py.
 
 aemo_electricity:
-  target: glue
+  target: onelake
   outputs:
 
-    # --- DuckDB + Iceberg REST catalog on AWS Glue.
+    # --- Microsoft Fabric OneLake. ONELAKE_TOKEN is minted per run (OIDC).
+    onelake:
+      type: duckdb
+      path: ':memory:'
+      database: cat_db
+      schema: "{{ env_var('DBT_SCHEMA', 'mart') }}"
+      threads: 4
+      settings:
+        preserve_insertion_order: false
+      secrets:
+        - type: azure
+          name: onelake_storage
+          provider: access_token
+          access_token: "{{ env_var('ONELAKE_TOKEN') }}"
+      attach:
+        - path: "{{ env_var('ONELAKE_WAREHOUSE', '1c52481c-0523-4a5a-bbde-fdc932bd77c2/ac303243-4441-4885-9e7d-f4f5e7af194c') }}"
+          alias: cat_db
+          type: iceberg
+          options:
+            endpoint: 'https://onelake.table.fabric.microsoft.com/iceberg'
+            token: "{{ env_var('ONELAKE_TOKEN') }}"
+            access_delegation_mode: 'none'
+            stage_create_tables: 0
+            skip_create_table_metadata_updates: 1
+            default_schema: dbo
+
+    # --- Cloudflare R2 Data Catalog.
+    r2:
+      type: duckdb
+      path: ':memory:'
+      database: cat_db
+      schema: "{{ env_var('DBT_SCHEMA', 'mart') }}"
+      threads: 4
+      settings:
+        preserve_insertion_order: false
+      attach:
+        - path: "{{ env_var('R2_WAREHOUSE') }}"
+          alias: cat_db
+          type: iceberg
+          options:
+            endpoint: "{{ env_var('ENDPOINT_R2') }}"
+            token: "{{ env_var('TOKEN_R2') }}"
+
+    # --- AWS S3 Tables.
+    s3_table:
+      type: duckdb
+      path: ':memory:'
+      database: cat_db
+      schema: "{{ env_var('DBT_SCHEMA', 'mart') }}"
+      threads: 4
+      settings:
+        preserve_insertion_order: false
+      secrets:
+        - type: s3
+          name: s3_table
+          key_id: "{{ env_var('S3_KEY') }}"
+          secret: "{{ env_var('S3_SECRET') }}"
+          region: 'ap-southeast-2'
+      attach:
+        - path: "{{ env_var('TABLEBUCKETARN') }}"
+          alias: cat_db
+          type: iceberg
+          options:
+            endpoint_type: s3_tables
+            stage_create_tables: 0
+            secret: s3_table
+
+    # --- Databricks Unity Catalog (external storage, vended credentials).
+    unity:
+      type: duckdb
+      path: ':memory:'
+      database: cat_db
+      schema: "{{ env_var('DBT_SCHEMA', 'mart') }}"
+      threads: 4
+      settings:
+        preserve_insertion_order: false
+      secrets:
+        - type: iceberg
+          name: uc_secret
+          token: "{{ env_var('UC_TOKEN') }}"
+      attach:
+        - path: 'iceberg'
+          alias: cat_db
+          type: iceberg
+          options:
+            endpoint: "{{ env_var('UC_ENDPOINT') }}"
+            access_delegation_mode: 'vended_credentials'
+            secret: uc_secret
+
+    # --- Snowflake Horizon (managed storage).
+    horizon:
+      type: duckdb
+      path: ':memory:'
+      database: cat_db
+      schema: "{{ env_var('DBT_SCHEMA', 'mart') }}"
+      threads: 4
+      settings:
+        preserve_insertion_order: false
+      secrets:
+        - type: iceberg
+          name: horizon_secret
+          client_id: ''
+          client_secret: "{{ env_var('HORIZON_TOKEN') }}"
+          oauth2_server_uri: "{{ env_var('HORIZON_ENDPOINT') }}/v1/oauth/tokens"
+          oauth2_grant_type: 'client_credentials'
+          oauth2_scope: 'session:role:DATA_ENGINEER'
+      attach:
+        - path: 'ICEBERG'
+          alias: cat_db
+          type: iceberg
+          options:
+            endpoint: "{{ env_var('HORIZON_ENDPOINT') }}"
+            access_delegation_mode: 'vended_credentials'
+            secret: horizon_secret
+            support_nested_namespaces: 0
+            stage_create_tables: 0
+            skip_create_table_metadata_updates: 1
+            remove_files_on_delete: 0
+            disable_multi_table_commit: 1
+
+    # --- AWS Glue. Blocked upstream: Glue requires an explicit table location on
+    # CREATE TABLE and dbt-duckdb has no way to send one — duckdb-iceberg#1299.
     glue:
       type: duckdb
       path: ':memory:'
-      database: glue_cat
+      database: cat_db
       schema: "{{ env_var('DBT_SCHEMA', 'mart') }}"
       threads: 4
       settings:
@@ -23,7 +145,7 @@ aemo_electricity:
           region: "{{ env_var('GLUE_REGION') }}"
       attach:
         - path: "{{ env_var('GLUE_WAREHOUSE') }}"
-          alias: glue_cat
+          alias: cat_db
           type: iceberg
           options:
             endpoint_type: glue
