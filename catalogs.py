@@ -125,10 +125,13 @@ def connect_catalog(cat):
             # snapshot commits go per-table via UpdateTable. A generic attach
             # assumes POST /transactions/commit support, which Glue 2xx-drops —
             # writes then silently never commit (table stuck at version 00000).
+            # PURGE_REQUESTED false: ENDPOINT_TYPE glue defaults it to true, but
+            # Glue 400-rejects DROP TABLE with purgeRequested=true.
             con.sql(f"""
                 ATTACH OR REPLACE '{os.environ["GLUE_WAREHOUSE"]}' AS cat_db (
                     TYPE iceberg,
                     ENDPOINT_TYPE 'glue',
+                    PURGE_REQUESTED false,
                     SECRET glue_secret
                 );
             """)
