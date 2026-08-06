@@ -16,12 +16,45 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt boto3
-      - run: |
-          echo "===== STABLE ====="
-          python debug_glue.py stable || true
-          echo "===== NIGHTLY (dev duckdb + core_nightly iceberg) ====="
-          pip install --quiet --pre --upgrade duckdb
-          python debug_glue.py nightly || true
+      - name: stable (duckdb 1.5.4 python)
+        run: python debug_glue.py stable || true
+        env:
+          S3_KEY: ${{ secrets.S3_KEY }}
+          S3_SECRET: ${{ secrets.S3_SECRET }}
+          GLUE_WAREHOUSE: ${{ secrets.GLUE_WAREHOUSE }}
+          GLUE_REGION: ${{ secrets.GLUE_REGION }}
+          GLUE_LOCATION: ${{ secrets.GLUE_LOCATION }}
+
+      # Bleeding-edge CLI from artifacts.duckdb.org — the only build with a
+      # matching core_nightly iceberg, i.e. duckdb-iceberg main.
+      - name: nightly (duckdb main + core_nightly iceberg)
+        run: |
+          curl -sSL https://artifacts.duckdb.org/latest/duckdb_cli-linux-amd64.zip -o d.zip
+          unzip -oq d.zip && chmod +x ./duckdb && ./duckdb -c "SELECT version();"
+          cat > probe.sql <<SQL
+          INSTALL iceberg FROM core_nightly; LOAD iceberg;
+          SELECT extension_version AS iceberg_ext FROM duckdb_extensions() WHERE extension_name='iceberg';
+          CREATE OR REPLACE SECRET glue_secret (
+              TYPE S3, KEY_ID '$S3_KEY', SECRET '$S3_SECRET', REGION '$GLUE_REGION');
+          ATTACH OR REPLACE '$GLUE_WAREHOUSE' AS cat_db (
+              TYPE iceberg,
+              ENDPOINT 'https://glue.$GLUE_REGION.amazonaws.com/iceberg',
+              AUTHORIZATION_TYPE 'sigv4',
+              STAGE_CREATE_TABLES false, SECRET glue_secret);
+          USE cat_db.demo;
+          DROP TABLE IF EXISTS probe_nightly;
+          CREATE TABLE probe_nightly (a INTEGER) WITH ('location' = '${GLUE_LOCATION%/}/probe_nightly');
+          INSERT INTO probe_nightly VALUES (1),(2),(3);
+          SELECT count(*) AS count_in_session FROM probe_nightly;
+          DETACH cat_db;
+          ATTACH OR REPLACE '$GLUE_WAREHOUSE' AS cat2 (
+              TYPE iceberg,
+              ENDPOINT 'https://glue.$GLUE_REGION.amazonaws.com/iceberg',
+              AUTHORIZATION_TYPE 'sigv4',
+              STAGE_CREATE_TABLES false, SECRET glue_secret);
+          SELECT count(*) AS count_on_reattach FROM cat2.demo.probe_nightly;
+          SQL
+          ./duckdb < probe.sql || true
         env:
           S3_KEY: ${{ secrets.S3_KEY }}
           S3_SECRET: ${{ secrets.S3_SECRET }}
