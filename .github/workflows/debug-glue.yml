@@ -1,0 +1,25 @@
+name: debug-glue
+
+# Temporary: diagnose why a Glue write produces an empty table. Delete once solved.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python debug_glue.py
+        env:
+          S3_KEY: ${{ secrets.S3_KEY }}
+          S3_SECRET: ${{ secrets.S3_SECRET }}
+          GLUE_WAREHOUSE: ${{ secrets.GLUE_WAREHOUSE }}
+          GLUE_REGION: ${{ secrets.GLUE_REGION }}
+          GLUE_LOCATION: ${{ secrets.GLUE_LOCATION }}
