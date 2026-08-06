@@ -16,31 +16,25 @@ def step(label, fn):
 
 
 con = connect_catalog("glue")
+
+step("namespaces", lambda: con.sql(
+    "SELECT schema_name FROM information_schema.schemata WHERE catalog_name='cat_db'").fetchall())
+
 con.sql("USE cat_db.demo;")
 step("drop", lambda: con.sql("DROP TABLE IF EXISTS simple;") or "ok")
-
-# 1. CTAS — the path main.py takes.
 step("ctas", lambda: con.sql(f"""
     CREATE TABLE simple {table_clause("glue", "simple")} AS
         SELECT * FROM read_csv_auto('{URL}', normalize_names=true);
 """) or "ok")
 step("count after ctas", lambda: con.sql("SELECT count(*) FROM simple").fetchone()[0])
 
-# 2. Did the parquet actually reach S3? Distinguishes a failed write from a
-#    failed metadata commit.
-step("parquet files in S3", lambda: con.sql(
-    f"SELECT count(*) FROM glob('{LOC}/simple/**/*.parquet')").fetchone()[0])
-step("rows in those parquet", lambda: con.sql(
-    f"SELECT count(*) FROM read_parquet('{LOC}/simple/**/*.parquet')").fetchone()[0])
-step("metadata files in S3", lambda: con.sql(
-    f"SELECT count(*) FROM glob('{LOC}/simple/**/*.json')").fetchone()[0])
-
-# 3. Does an explicit INSERT commit where CTAS didn't?
-step("insert", lambda: con.sql(
-    f"INSERT INTO simple SELECT * FROM read_csv_auto('{URL}', normalize_names=true);") or "ok")
-step("count after insert", lambda: con.sql("SELECT count(*) FROM simple").fetchone()[0])
-
-# 4. Fresh connection — rules out stale in-session catalog state.
-con.close()
-con2 = connect_catalog("glue")
-step("count on fresh attach", lambda: con2.sql("SELECT count(*) FROM cat_db.demo.simple").fetchone()[0])
+# Where did the files actually go, and did the metadata get a snapshot?
+step("all files under table dir", lambda: con.sql(
+    f"SELECT file FROM glob('{LOC}/simple/**') ORDER BY file").fetchall())
+step("snapshots in metadata json", lambda: con.sql(f"""
+    SELECT regexp_extract(filename, '[^/]+$') AS f,
+           len(COALESCE(snapshots, [])) AS n_snapshots,
+           "current-snapshot-id", location
+    FROM read_json('{LOC}/simple/metadata/*.json', filename=true, union_by_name=true)
+    ORDER BY f
+""").fetchall())
