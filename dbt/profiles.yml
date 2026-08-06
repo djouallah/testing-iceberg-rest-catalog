@@ -1,0 +1,31 @@
+# Local profile for running djouallah/fabric-dbt-benchmark verbatim against the
+# catalogs tested in this repo. Same profile name the project expects; switch
+# catalogs with `dbt build --target <name> --profiles-dir <this dir>`.
+
+aemo_electricity:
+  target: glue
+  outputs:
+
+    # --- DuckDB + Iceberg REST catalog on AWS Glue.
+    glue:
+      type: duckdb
+      path: ':memory:'
+      database: glue_cat
+      schema: "{{ env_var('DBT_SCHEMA', 'mart') }}"
+      threads: 4
+      settings:
+        preserve_insertion_order: false
+      secrets:
+        - type: s3
+          name: glue_secret
+          key_id: "{{ env_var('S3_KEY') }}"
+          secret: "{{ env_var('S3_SECRET') }}"
+          region: "{{ env_var('GLUE_REGION') }}"
+      attach:
+        - path: "{{ env_var('GLUE_WAREHOUSE') }}"
+          alias: glue_cat
+          type: iceberg
+          options:
+            endpoint_type: glue
+            purge_requested: 0
+            secret: glue_secret

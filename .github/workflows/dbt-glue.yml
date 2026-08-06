@@ -1,0 +1,42 @@
+name: dbt-glue
+
+# Run the fabric-dbt-benchmark dbt project verbatim against AWS Glue: clone it,
+# point dbt at the local profile in dbt/, land a small AEMO batch, dbt build.
+on:
+  workflow_dispatch:
+    inputs:
+      download_limit:
+        description: archives per source type (keep small)
+        default: "2"
+
+permissions:
+  contents: read
+
+env:
+  S3_KEY: ${{ secrets.S3_KEY }}
+  S3_SECRET: ${{ secrets.S3_SECRET }}
+  GLUE_WAREHOUSE: ${{ secrets.GLUE_WAREHOUSE }}
+  GLUE_REGION: ${{ secrets.GLUE_REGION }}
+  GLUE_LOCATION: ${{ secrets.GLUE_LOCATION }}
+  FILES_PATH: /tmp/landing
+
+jobs:
+  dbt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: git clone --depth 1 https://github.com/djouallah/fabric-dbt-benchmark bench
+      # duckrun brings dbt-duckdb + duckdb + deltalake at its own pins.
+      - run: pip install duckrun
+      - name: land AEMO files
+        run: python bench/download_aemo.py
+        env:
+          download_limit: ${{ inputs.download_limit }}
+          daily_download_limit: ${{ inputs.download_limit }}
+      - name: dbt build --target glue
+        run: |
+          dbt build --project-dir bench --profiles-dir "$GITHUB_WORKSPACE/dbt" --target glue \
+            || dbt retry --project-dir bench --profiles-dir "$GITHUB_WORKSPACE/dbt" --target glue
