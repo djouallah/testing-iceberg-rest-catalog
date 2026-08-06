@@ -125,7 +125,7 @@ def connect_catalog(cat):
                     TYPE iceberg,
                     ENDPOINT 'https://glue.{region}.amazonaws.com/iceberg',
                     AUTHORIZATION_TYPE 'sigv4',
-                    STAGE_CREATE_TABLES false, SECRET glue_secret
+                    SECRET glue_secret
                 );
             """)
 

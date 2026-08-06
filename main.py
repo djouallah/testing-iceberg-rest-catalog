@@ -28,6 +28,10 @@ def write_demo(cat):
     """)
     n = con.sql(f"SELECT count(*) FROM cat_db.{DB}.{TBL}").fetchone()[0]
     con.close()
+    if not n:
+        # Table created but empty — the snapshot commit didn't land. Silent
+        # data loss, so treat it as a failure rather than reporting ok.
+        raise RuntimeError("table is empty after write")
     return n
 
 
