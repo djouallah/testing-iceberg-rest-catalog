@@ -56,6 +56,10 @@ jobs:
         target: ${{ fromJSON(needs.setup.outputs.catalogs) }}
     env:
       FILES_PATH: /tmp/landing
+      # Isolate from any production data in the catalogs: the benchmark's
+      # generate_schema_name prefixes every schema with a non-default
+      # DBT_SCHEMA, so runs land in dbt_landing / dbt_mart.
+      DBT_SCHEMA: dbt
       S3_KEY: ${{ secrets.S3_KEY }}
       S3_SECRET: ${{ secrets.S3_SECRET }}
       TABLEBUCKETARN: ${{ secrets.TABLEBUCKETARN }}
