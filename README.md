@@ -9,3 +9,4 @@
 | Snowflake Horizon (managed storage) | ✅ | |
 | Databricks Unity (managed storage) | ❌ | by design — no credential vending |
 | Google Lakehouse | ❓ | configuration not documented / not sure |
+| AWS Glue (SageMaker Lakehouse) | ❓ | untested — needs explicit table location |

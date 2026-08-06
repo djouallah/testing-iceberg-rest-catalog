@@ -2,12 +2,12 @@
 
 CATALOGS is a comma-separated list (default: onelake). Prints a per-catalog
 ok/ERROR line and exits non-zero if a catalog that isn't an expected failure
-fails. Error details are intentionally not printed (avoid leaking secrets).
+fails. Error details are hidden unless DEBUG=1 (avoid leaking secrets).
 """
 
 import os
 
-from catalogs import connect_catalog
+from catalogs import connect_catalog, table_clause
 
 DB = "demo"
 TBL = "simple"
@@ -23,7 +23,7 @@ def write_demo(cat):
         CREATE SCHEMA IF NOT EXISTS cat_db.{DB};
         USE cat_db.{DB};
         DROP TABLE IF EXISTS {TBL};
-        CREATE TABLE {TBL} AS
+        CREATE TABLE {TBL} {table_clause(cat, DB, TBL)} AS
             SELECT * FROM read_csv_auto('{URL}', normalize_names=true);
     """)
     n = con.sql(f"SELECT count(*) FROM cat_db.{DB}.{TBL}").fetchone()[0]
@@ -38,8 +38,11 @@ def main():
         try:
             n = write_demo(cat)
             results.append((cat, "ok", f"{n} rows"))
-        except Exception:
-            # Errors intentionally not printed — they can carry vended tokens / URLs.
+        except Exception as e:
+            # Errors are hidden by default — they can carry vended tokens / URLs.
+            # Set DEBUG=1 (workflow_dispatch `debug` input) to see them.
+            if os.environ.get("DEBUG") == "1":
+                print(f"--- {cat} ---\n{e}\n")
             results.append((cat, "ERROR", ""))
 
     width = max(len(c) for c, _, _ in results)

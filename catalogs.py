@@ -1,7 +1,7 @@
 """Iceberg REST catalog connections for DuckDB.
 
 Every catalog runs on DuckDB 1.5.4. OneLake authenticates via OIDC federation;
-the others (R2, S3 Tables, Unity, Horizon) read their credentials from
+the others (R2, S3 Tables, Glue, Unity, Horizon) read their credentials from
 environment variables (GitHub Actions secrets).
 """
 
@@ -108,6 +108,27 @@ def connect_catalog(cat):
                 );
             """)
 
+        case "glue":  # AWS Glue Data Catalog / SageMaker Lakehouse
+            region = os.environ["GLUE_REGION"]
+            # The S3 secret does double duty: sigv4 signing for the catalog API
+            # and the parquet writes to GLUE_LOCATION.
+            con.sql(f"""
+                CREATE OR REPLACE SECRET glue_secret (
+                    TYPE S3,
+                    KEY_ID '{os.environ["S3_KEY"]}',
+                    SECRET '{os.environ["S3_SECRET"]}',
+                    REGION '{region}'
+                );
+            """)
+            con.sql(f"""
+                ATTACH OR REPLACE '{os.environ["GLUE_WAREHOUSE"]}' AS cat_db (
+                    TYPE iceberg,
+                    ENDPOINT 'https://glue.{region}.amazonaws.com/iceberg',
+                    AUTHORIZATION_TYPE 'sigv4',
+                    STAGE_CREATE_TABLES false, SECRET glue_secret
+                );
+            """)
+
         case "horizon":  # Snowflake Horizon (managed storage)
             ep = os.environ["HORIZON_ENDPOINT"]
             con.sql(f"""
@@ -136,3 +157,15 @@ def connect_catalog(cat):
             raise ValueError(f"Unknown or not-yet-configured catalog: {cat}")
 
     return con
+
+
+def table_clause(cat, db, tbl):
+    """Extra CREATE TABLE clause for catalogs that don't assign a storage location.
+
+    Glue is a plain catalog over a regular S3 bucket, so it has no location to
+    hand out — every table has to name its own. Everything else manages storage.
+    """
+    base = os.environ.get("GLUE_LOCATION") if cat == "glue" else None
+    if base:
+        return f"WITH ('location' = '{base.rstrip('/')}/{db}/{tbl}')"
+    return ""  # unset: rely on the Glue database's own LocationUri

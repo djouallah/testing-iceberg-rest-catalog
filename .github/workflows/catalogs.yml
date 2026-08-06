@@ -12,9 +12,14 @@ on:
           - onelake
           - r2
           - s3_table
+          - glue
           - unity
           - unity_managed
           - horizon
+      debug:
+        description: Print error details (may leak vended tokens)
+        type: boolean
+        default: false
   push:
     branches: [ main ]
 
@@ -34,7 +39,7 @@ jobs:
           target="${{ inputs.target }}"
           [ -z "$target" ] && target="all"
           if [ "$target" = "all" ]; then
-            echo 'catalogs=["onelake","r2","s3_table","unity","unity_managed","horizon"]' >> "$GITHUB_OUTPUT"
+            echo 'catalogs=["onelake","r2","s3_table","glue","unity","unity_managed","horizon"]' >> "$GITHUB_OUTPUT"
           else
             echo "catalogs=[\"$target\"]" >> "$GITHUB_OUTPUT"
           fi
@@ -77,12 +82,16 @@ jobs:
       - run: python main.py
         env:
           CATALOGS: ${{ matrix.catalog }}
+          DEBUG: ${{ inputs.debug && '1' || '0' }}
           ENDPOINT_R2: ${{ secrets.ENDPOINT_R2 }}
           TOKEN_R2: ${{ secrets.TOKEN_R2 }}
           R2_WAREHOUSE: ${{ secrets.R2_WAREHOUSE }}
           S3_KEY: ${{ secrets.S3_KEY }}
           S3_SECRET: ${{ secrets.S3_SECRET }}
           TABLEBUCKETARN: ${{ secrets.TABLEBUCKETARN }}
+          GLUE_WAREHOUSE: ${{ secrets.GLUE_WAREHOUSE }}
+          GLUE_REGION: ${{ secrets.GLUE_REGION }}
+          GLUE_LOCATION: ${{ secrets.GLUE_LOCATION }}
           UC_ENDPOINT: ${{ secrets.UC_ENDPOINT }}
           UC_TOKEN: ${{ secrets.UC_TOKEN }}
           HORIZON_TOKEN: ${{ secrets.HORIZON_TOKEN }}
