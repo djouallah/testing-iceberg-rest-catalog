@@ -120,12 +120,15 @@ def connect_catalog(cat):
                     REGION '{region}'
                 );
             """)
+            # ENDPOINT_TYPE 'glue' (not a generic ENDPOINT) is load-bearing: it
+            # scopes duckdb-iceberg to the REST operations Glue implements, so
+            # snapshot commits go per-table via UpdateTable. A generic attach
+            # assumes POST /transactions/commit support, which Glue 2xx-drops —
+            # writes then silently never commit (table stuck at version 00000).
             con.sql(f"""
                 ATTACH OR REPLACE '{os.environ["GLUE_WAREHOUSE"]}' AS cat_db (
                     TYPE iceberg,
-                    ENDPOINT 'https://glue.{region}.amazonaws.com/iceberg',
-                    AUTHORIZATION_TYPE 'sigv4',
-                    STAGE_CREATE_TABLES false,
+                    ENDPOINT_TYPE 'glue',
                     SECRET glue_secret
                 );
             """)
