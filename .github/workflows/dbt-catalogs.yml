@@ -2,8 +2,8 @@ name: dbt-catalogs
 
 # Run the fabric-dbt-benchmark dbt project verbatim against each Iceberg REST
 # catalog: clone it, point dbt at the local profile in dbt/, land a small AEMO
-# batch, dbt build. `all` runs the four fast catalogs. r2 works but its catalog
-# is too slow for the default set — run it explicitly if needed. glue stays
+# batch, dbt build. Runs land in dbt_landing / dbt_mart (DBT_SCHEMA=dbt) so
+# catalogs that also hold production data are never touched. glue stays
 # selectable but is blocked upstream (duckdb-iceberg#1299 — no table location
 # from dbt).
 on:
@@ -40,7 +40,7 @@ jobs:
           target="${{ inputs.target }}"
           [ -z "$target" ] && target="all"
           if [ "$target" = "all" ]; then
-            echo 'catalogs=["onelake","s3_table","unity","horizon"]' >> "$GITHUB_OUTPUT"
+            echo 'catalogs=["onelake","r2","s3_table","unity","horizon"]' >> "$GITHUB_OUTPUT"
           else
             echo "catalogs=[\"$target\"]" >> "$GITHUB_OUTPUT"
           fi
