@@ -4,7 +4,6 @@ import os
 
 from catalogs import connect_catalog, table_clause
 
-URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
 LOC = os.environ["GLUE_LOCATION"].rstrip("/")
 
 
@@ -12,29 +11,34 @@ def step(label, fn):
     try:
         print(f"{label}: {fn()}")
     except Exception as e:
-        print(f"{label}: FAILED -> {str(e)[:400]}")
+        print(f"{label}: FAILED -> {str(e)[:300]}")
+
+
+def versions(tbl):
+    """Metadata versions committed for `tbl`, with their snapshot counts."""
+    return con.sql(f"""
+        SELECT regexp_extract(filename, '[^/]+$')[1:5] AS v,
+               len(COALESCE(snapshots, [])) AS snaps
+        FROM read_json('{LOC}/{tbl}/metadata/*.json', filename=true, union_by_name=true)
+        ORDER BY v
+    """).fetchall()
 
 
 con = connect_catalog("glue")
-
-step("namespaces", lambda: con.sql(
-    "SELECT schema_name FROM information_schema.schemata WHERE catalog_name='cat_db'").fetchall())
-
 con.sql("USE cat_db.demo;")
-step("drop", lambda: con.sql("DROP TABLE IF EXISTS simple;") or "ok")
-step("ctas", lambda: con.sql(f"""
-    CREATE TABLE simple {table_clause("glue", "simple")} AS
-        SELECT * FROM read_csv_auto('{URL}', normalize_names=true);
-""") or "ok")
-step("count after ctas", lambda: con.sql("SELECT count(*) FROM simple").fetchone()[0])
 
-# Where did the files actually go, and did the metadata get a snapshot?
-step("all files under table dir", lambda: con.sql(
-    f"SELECT file FROM glob('{LOC}/simple/**') ORDER BY file").fetchall())
-step("snapshots in metadata json", lambda: con.sql(f"""
-    SELECT regexp_extract(filename, '[^/]+$') AS f,
-           len(COALESCE(snapshots, [])) AS n_snapshots,
-           "current-snapshot-id", location
-    FROM read_json('{LOC}/simple/metadata/*.json', filename=true, union_by_name=true)
-    ORDER BY f
-""").fetchall())
+# A: explicit CREATE then INSERT — the path the DuckDB 1.5 notes say works.
+step("A drop", lambda: con.sql("DROP TABLE IF EXISTS probe_ins;") or "ok")
+step("A create", lambda: con.sql(
+    f"CREATE TABLE probe_ins (a INTEGER) {table_clause('glue', 'probe_ins')};") or "ok")
+step("A versions after create", lambda: versions("probe_ins"))
+step("A insert", lambda: con.sql("INSERT INTO probe_ins VALUES (1),(2),(3);") or "ok")
+step("A count", lambda: con.sql("SELECT count(*) FROM probe_ins").fetchone()[0])
+step("A versions after insert", lambda: versions("probe_ins"))
+
+# B: same thing via CTAS, for comparison.
+step("B drop", lambda: con.sql("DROP TABLE IF EXISTS probe_ctas;") or "ok")
+step("B ctas", lambda: con.sql(
+    f"CREATE TABLE probe_ctas {table_clause('glue', 'probe_ctas')} AS SELECT 1 AS a;") or "ok")
+step("B count", lambda: con.sql("SELECT count(*) FROM probe_ctas").fetchone()[0])
+step("B versions", lambda: versions("probe_ctas"))
