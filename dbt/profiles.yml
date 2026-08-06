@@ -75,7 +75,7 @@ aemo_electricity:
             secret: s3_table
 
     # --- Databricks Unity Catalog (external storage, vended credentials).
-    unity:
+    unity-external-storage:
       type: duckdb
       path: ':memory:'
       database: cat_db

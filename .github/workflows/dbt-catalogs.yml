@@ -18,7 +18,7 @@ on:
           - onelake
           - r2
           - s3_table
-          - unity
+          - unity-external-storage
           - horizon
           - glue
       download_limit:
@@ -40,7 +40,7 @@ jobs:
           target="${{ inputs.target }}"
           [ -z "$target" ] && target="all"
           if [ "$target" = "all" ]; then
-            echo 'catalogs=["onelake","r2","s3_table","unity","horizon"]' >> "$GITHUB_OUTPUT"
+            echo 'catalogs=["onelake","r2","s3_table","unity-external-storage","horizon"]' >> "$GITHUB_OUTPUT"
           else
             echo "catalogs=[\"$target\"]" >> "$GITHUB_OUTPUT"
           fi
