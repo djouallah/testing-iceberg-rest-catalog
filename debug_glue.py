@@ -1,40 +1,33 @@
-"""Temporary: is the Glue commit just eventually consistent? Delete once solved."""
+"""Temporary: ask Glue itself what it thinks demo.simple is. Delete once solved."""
 
-import time
+import json
+import os
 
-from catalogs import connect_catalog, table_clause
+import boto3
 
-URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
+glue = boto3.client(
+    "glue",
+    region_name=os.environ["GLUE_REGION"],
+    aws_access_key_id=os.environ["S3_KEY"],
+    aws_secret_access_key=os.environ["S3_SECRET"],
+)
 
+db = glue.get_database(Name="demo")["Database"]
+print("database demo LocationUri:", db.get("LocationUri"), flush=True)
 
-def step(label, fn):
+for name in ("simple", "probe_ins", "probe_ctas", "probe_lag"):
     try:
-        print(f"{label}: {fn()}", flush=True)
+        t = glue.get_table(DatabaseName="demo", Name=name)["Table"]
     except Exception as e:
-        print(f"{label}: FAILED -> {str(e)[:300]}", flush=True)
-
-
-def count(con, tbl):
-    return con.sql(f"SELECT count(*) FROM cat_db.demo.{tbl}").fetchone()[0]
-
-
-# 1. How do tables written by EARLIER runs read now, minutes later?
-con = connect_catalog("glue")
-for t in ("simple", "probe_ins", "probe_ctas"):
-    step(f"pre-existing demo.{t}", lambda t=t: count(con, t))
-
-# 2. Fresh write, then poll a fresh attach.
-con.sql("USE cat_db.demo;")
-step("drop", lambda: con.sql("DROP TABLE IF EXISTS probe_lag;") or "ok")
-step("ctas", lambda: con.sql(f"""
-    CREATE TABLE probe_lag {table_clause("glue", "probe_lag")} AS
-        SELECT * FROM read_csv_auto('{URL}', normalize_names=true);
-""") or "ok")
-step("count immediately, same connection", lambda: count(con, "probe_lag"))
-con.close()
-
-for wait in (5, 10, 15, 30):
-    time.sleep(wait)
-    c = connect_catalog("glue")
-    step(f"count on fresh attach, +{wait}s", lambda: count(c, "probe_lag"))
-    c.close()
+        print(f"\n{name}: FAILED -> {str(e)[:200]}", flush=True)
+        continue
+    params = t.get("Parameters", {})
+    sd = t.get("StorageDescriptor", {})
+    print(f"\n{name}:", flush=True)
+    print("  table_type        :", params.get("table_type"), flush=True)
+    print("  metadata_location :", params.get("metadata_location"), flush=True)
+    print("  sd.Location       :", sd.get("Location"), flush=True)
+    print("  columns           :", [c["Name"] for c in sd.get("Columns", [])][:5], flush=True)
+    print("  other params      :", json.dumps(
+        {k: v for k, v in params.items()
+         if k not in ("metadata_location", "table_type")})[:300], flush=True)
