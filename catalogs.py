@@ -159,13 +159,14 @@ def connect_catalog(cat):
     return con
 
 
-def table_clause(cat, db, tbl):
+def table_clause(cat, tbl):
     """Extra CREATE TABLE clause for catalogs that don't assign a storage location.
 
-    Glue is a plain catalog over a regular S3 bucket, so it has no location to
-    hand out — every table has to name its own. Everything else manages storage.
+    Glue is a plain catalog over a regular S3 bucket and does not inherit its
+    database's LocationUri, so every table has to name its own path. GLUE_LOCATION
+    is the database folder; the table name is appended. Everything else manages
+    its own storage and gets no clause.
     """
-    base = os.environ.get("GLUE_LOCATION") if cat == "glue" else None
-    if base:
-        return f"WITH ('location' = '{base.rstrip('/')}/{db}/{tbl}')"
-    return ""  # unset: rely on the Glue database's own LocationUri
+    if cat == "glue":
+        return f"WITH ('location' = '{os.environ['GLUE_LOCATION'].rstrip('/')}/{tbl}')"
+    return ""

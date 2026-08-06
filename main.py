@@ -23,7 +23,7 @@ def write_demo(cat):
         CREATE SCHEMA IF NOT EXISTS cat_db.{DB};
         USE cat_db.{DB};
         DROP TABLE IF EXISTS {TBL};
-        CREATE TABLE {TBL} {table_clause(cat, DB, TBL)} AS
+        CREATE TABLE {TBL} {table_clause(cat, TBL)} AS
             SELECT * FROM read_csv_auto('{URL}', normalize_names=true);
     """)
     n = con.sql(f"SELECT count(*) FROM cat_db.{DB}.{TBL}").fetchone()[0]
