@@ -6,6 +6,9 @@
 .env
 *.env
 
+# Blog drafts — local only
+blog/
+
 # Python
 __pycache__/
 *.pyc
