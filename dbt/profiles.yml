@@ -2,6 +2,12 @@
 # catalogs tested in this repo. Same profile name the project expects; switch
 # catalogs with `dbt build --target <name> --profiles-dir <this dir>`.
 # Each target mirrors the proven ATTACH in catalogs.py.
+#
+# Scope: managed IRC services only — the catalog provides the storage too
+# (OneLake, R2, S3 Tables, Horizon). Bring-your-own-bucket catalogs live in
+# catalogs.py but not here: Unity external storage by scope, Glue because
+# dbt-duckdb cannot send the per-table location Glue requires
+# (duckdb-iceberg#1299).
 
 aemo_electricity:
   target: onelake
@@ -74,28 +80,6 @@ aemo_electricity:
             stage_create_tables: 0
             secret: s3_table
 
-    # --- Databricks Unity Catalog (external storage, vended credentials).
-    unity-external-storage:
-      type: duckdb
-      path: ':memory:'
-      database: cat_db
-      schema: "{{ env_var('DBT_SCHEMA', 'mart') }}"
-      threads: 4
-      settings:
-        preserve_insertion_order: false
-      secrets:
-        - type: iceberg
-          name: uc_secret
-          token: "{{ env_var('UC_TOKEN') }}"
-      attach:
-        - path: 'iceberg'
-          alias: cat_db
-          type: iceberg
-          options:
-            endpoint: "{{ env_var('UC_ENDPOINT') }}"
-            access_delegation_mode: 'vended_credentials'
-            secret: uc_secret
-
     # --- Snowflake Horizon (managed storage).
     horizon:
       type: duckdb
@@ -126,28 +110,3 @@ aemo_electricity:
             skip_create_table_metadata_updates: 1
             remove_files_on_delete: 0
             disable_multi_table_commit: 1
-
-    # --- AWS Glue. Blocked upstream: Glue requires an explicit table location on
-    # CREATE TABLE and dbt-duckdb has no way to send one — duckdb-iceberg#1299.
-    glue:
-      type: duckdb
-      path: ':memory:'
-      database: cat_db
-      schema: "{{ env_var('DBT_SCHEMA', 'mart') }}"
-      threads: 4
-      settings:
-        preserve_insertion_order: false
-      secrets:
-        - type: s3
-          name: glue_secret
-          key_id: "{{ env_var('S3_KEY') }}"
-          secret: "{{ env_var('S3_SECRET') }}"
-          region: "{{ env_var('GLUE_REGION') }}"
-      attach:
-        - path: "{{ env_var('GLUE_WAREHOUSE') }}"
-          alias: cat_db
-          type: iceberg
-          options:
-            endpoint_type: glue
-            purge_requested: 0
-            secret: glue_secret
