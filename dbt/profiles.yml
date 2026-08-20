@@ -22,6 +22,11 @@ aemo_electricity:
       threads: 4
       settings:
         preserve_insertion_order: false
+      secrets:
+        - type: azure
+          name: onelake_storage
+          provider: access_token
+          access_token: "{{ env_var('ONELAKE_TOKEN') }}"
       attach:
         - path: "{{ env_var('ONELAKE_WAREHOUSE', '1c52481c-0523-4a5a-bbde-fdc932bd77c2/ac303243-4441-4885-9e7d-f4f5e7af194c') }}"
           alias: cat_db
@@ -29,9 +34,7 @@ aemo_electricity:
           options:
             endpoint: 'https://onelake.table.fabric.microsoft.com/iceberg'
             token: "{{ env_var('ONELAKE_TOKEN') }}"
-            # Vended per-table SAS covers storage — no azure secret needed, same
-            # as the horizon target below. See the note in catalogs.py.
-            access_delegation_mode: 'vended_credentials'
+            access_delegation_mode: 'none'
             stage_create_tables: 0
             skip_create_table_metadata_updates: 1
             default_schema: dbo
