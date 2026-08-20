@@ -118,14 +118,6 @@ def catalog_options(cat):
                 "header.X-Iceberg-Access-Delegation": VENDED,
             }
 
-        case "unity_managed":  # Unity Catalog managed storage (serverless)
-            return {
-                "uri": os.environ["UC_ENDPOINT"],
-                "warehouse": "serverless",
-                "token": os.environ["UC_TOKEN"],
-                "header.X-Iceberg-Access-Delegation": VENDED,
-            }
-
         case "horizon":  # Snowflake Horizon (managed storage)
             # Snowflake's own Spark example passes the token bare and lets scope
             # carry the role — no oauth2-server-uri, no client_credentials

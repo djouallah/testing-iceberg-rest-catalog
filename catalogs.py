@@ -112,20 +112,6 @@ def connect_catalog(cat):
                 );
             """)
 
-        case "unity_managed":  # Unity Catalog managed storage (serverless)
-            con.sql(f"""
-                CREATE OR REPLACE SECRET uc_secret (
-                    TYPE iceberg, TOKEN '{os.environ["UC_TOKEN"]}'
-                );
-            """)
-            con.sql(f"""
-                ATTACH OR REPLACE 'serverless' AS cat_db (
-                    TYPE iceberg, SECRET uc_secret,
-                    ENDPOINT '{os.environ["UC_ENDPOINT"]}',
-                    ACCESS_DELEGATION_MODE 'vended_credentials'
-                );
-            """)
-
         case "glue":  # AWS Glue Data Catalog / SageMaker Lakehouse
             region = os.environ["GLUE_REGION"]
             # The S3 secret does double duty: sigv4 signing for the catalog API

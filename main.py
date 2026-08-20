@@ -1,8 +1,8 @@
 """Write a demo table (demo.simple) to each catalog named in the CATALOGS env var.
 
 CATALOGS is a comma-separated list (default: onelake). Prints a per-catalog
-ok/ERROR line and exits non-zero if a catalog that isn't an expected failure
-fails. Error details are hidden unless DEBUG=1 (avoid leaking secrets).
+ok/ERROR line and exits non-zero if any catalog fails. Error details are hidden
+unless DEBUG=1 (avoid leaking secrets); the ERROR line names the exception class.
 """
 
 import os
@@ -12,9 +12,6 @@ from catalogs import connect_catalog, error_label, table_clause
 DB = "demo"
 TBL = "simple"
 URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
-
-# Known-broken catalogs: reported ERROR but don't fail the CI job.
-EXPECTED_FAILURES = {"unity_managed"}
 
 # Catalogs that cannot take a CTAS. OneLake IRC vends no credentials on
 # createTable, so the data write goes out unauthenticated and 401s; loadTable
@@ -68,8 +65,7 @@ def main():
     for cat, status, detail in results:
         print(f"{cat.ljust(width)}  {status:6}  {detail}".rstrip())
 
-    unexpected = [c for c, status, _ in results if status == "ERROR" and c not in EXPECTED_FAILURES]
-    if unexpected:
+    if any(status == "ERROR" for _, status, _ in results):
         raise SystemExit(1)
 
 

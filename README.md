@@ -12,7 +12,6 @@ a ❌ under both is a catalog gap, a ❌ under one is a client gap.
 | AWS S3 Tables | ✅ | |
 | Databricks Unity (external storage) | ✅ | |
 | Snowflake Horizon (managed storage) | ✅ | |
-| Databricks Unity (managed storage) | ❌ | by design — no credential vending |
 | Google Lakehouse | ❓ | configuration not documented / not sure |
 | AWS Glue (SageMaker Lakehouse) | ✅ | needs `ENDPOINT_TYPE 'glue'`, `PURGE_REQUESTED false`, and an explicit table location — a generic `ENDPOINT` attach silently loses every commit (Glue 2xx-drops the unsupported `/transactions/commit` route) |
 
@@ -53,23 +52,39 @@ Spark *minor*, and 4.1 is the newest one with a runtime.
 
 | Catalog | Status | Notes |
 | --- | :---: | --- |
-| Microsoft OneLake | ❓ | not yet run |
-| Cloudflare R2 | ❓ | not yet run |
-| AWS S3 Tables | ❓ | not yet run |
-| Databricks Unity (external storage) | ❓ | not yet run |
-| Snowflake Horizon (managed storage) | ❓ | not yet run |
-| Databricks Unity (managed storage) | ❓ | not yet run |
-| AWS Glue (SageMaker Lakehouse) | ❓ | not yet run |
+| Cloudflare R2 | ✅ | |
+| AWS S3 Tables | ✅ | no CTAS — `CREATE TABLE` then `INSERT` (see below) |
+| Databricks Unity (external storage) | ✅ | |
+| Snowflake Horizon (managed storage) | ✅ | no CTAS; `credential` takes the token bare, the role rides on `scope` |
+| Microsoft OneLake | ❌ | `BadRequestException` on create — unresolved |
+| AWS Glue (SageMaker Lakehouse) | ❌ | `BadRequestException` — unresolved |
 
-Two translations are worth noting, since Spark has no equivalent of DuckDB's `ENDPOINT_TYPE`:
-S3 Tables and Glue are reached through their own Iceberg REST endpoints
-(`s3tables.<region>.amazonaws.com/iceberg`, `glue.<region>.amazonaws.com/iceberg`) with SigV4
-signing. For Glue that is the same finding as `ENDPOINT_TYPE 'glue'` in a different shape — the
-dedicated route commits per table, the generic one does not.
+Every ✅ writes the same 176 rows DuckDB does.
 
-`CREATE_THEN_INSERT` in [spark_main.py](spark_main.py) starts out holding `onelake`, mirroring
-DuckDB — but as a hypothesis, not a finding. If Spark's CTAS succeeds there, the gap is
-duckdb-iceberg's rather than OneLake's and the section above needs rewriting.
+Spark has no equivalent of DuckDB's `ENDPOINT_TYPE`, so S3 Tables and Glue are reached through
+their own Iceberg REST endpoints (`s3tables.<region>.amazonaws.com/iceberg`,
+`glue.<region>.amazonaws.com/iceberg`) with SigV4 signing.
+
+### Managed storage rejects a CTAS
+
+Spark's `CREATE TABLE AS SELECT` stages the table first, and a staged create carries a location
+the client picked. The managed services refuse it — they choose storage themselves. Horizon says
+so outright:
+
+```
+BadRequestException: Malformed request: Setting table location is not allowed
+```
+
+and Snowflake documents both halves: *"You can't specify a base location with your CREATE TABLE
+statement"* and *"CREATE TABLE AS SELECT (CTAS) from an external engine is not supported."* The
+fix is a real `CREATE TABLE` with a column list, then `INSERT` — `CREATE TABLE ... AS SELECT ...
+WHERE 1 = 0` does not work, because it is still a CTAS. See `CREATE_THEN_INSERT` in
+[spark_main.py](spark_main.py).
+
+This is the same boundary DuckDB hits from the other side: `CREATE_THEN_INSERT` here holds
+`onelake`, `s3_table` and `horizon` — exactly the catalogs [catalogs.py](catalogs.py) gives
+`STAGE_CREATE_TABLES false`. Two engines, two mechanisms, one line: managed storage will not take
+a location from the client.
 
 ## A real dbt project, verbatim
 

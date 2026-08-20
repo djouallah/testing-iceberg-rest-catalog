@@ -14,7 +14,6 @@ on:
           - s3_table
           - glue
           - unity
-          - unity_managed
           - horizon
       debug:
         description: Print error details (may leak vended tokens)
@@ -39,7 +38,7 @@ jobs:
           target="${{ inputs.target }}"
           [ -z "$target" ] && target="all"
           if [ "$target" = "all" ]; then
-            echo 'catalogs=["onelake","r2","s3_table","glue","unity","unity_managed","horizon"]' >> "$GITHUB_OUTPUT"
+            echo 'catalogs=["onelake","r2","s3_table","glue","unity","horizon"]' >> "$GITHUB_OUTPUT"
           else
             echo "catalogs=[\"$target\"]" >> "$GITHUB_OUTPUT"
           fi

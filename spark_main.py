@@ -1,9 +1,9 @@
 """Write a demo table (demo.spark_simple) to each catalog named in CATALOGS, via Spark.
 
 The Spark twin of main.py: same comma-separated CATALOGS env var (default:
-onelake), same per-catalog ok/ERROR report, same non-zero exit unless every
-failure was expected. Error details are hidden unless DEBUG=1 (avoid leaking
-secrets).
+onelake), same per-catalog ok/ERROR report, same non-zero exit if any catalog
+fails. Error details are hidden unless DEBUG=1 (avoid leaking secrets); the
+ERROR line names the exception class.
 
 The table name differs from main.py's demo.simple on purpose: both engines write
 to the same live catalogs, and a distinct table means the two workflows can never
@@ -21,9 +21,6 @@ from spark_catalogs import catalog_name, location_clause, spark_session
 DB = "demo"
 TBL = "spark_simple"
 URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
-
-# Known-broken catalogs: reported ERROR but don't fail the CI job.
-EXPECTED_FAILURES = {"unity_managed"}
 
 # Catalogs that cannot take a CTAS — exactly the managed-storage ones, which is
 # also exactly the set catalogs.py gives STAGE_CREATE_TABLES false. Spark's CTAS
@@ -104,8 +101,7 @@ def main():
     for cat, status, detail in results:
         print(f"{cat.ljust(width)}  {status:6}  {detail}".rstrip())
 
-    unexpected = [c for c, status, _ in results if status == "ERROR" and c not in EXPECTED_FAILURES]
-    if unexpected:
+    if any(status == "ERROR" for _, status, _ in results):
         raise SystemExit(1)
 
 
