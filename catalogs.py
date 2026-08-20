@@ -1,8 +1,8 @@
 """Iceberg REST catalog connections for DuckDB.
 
-Every catalog runs on DuckDB 1.5.4. OneLake authenticates via OIDC federation;
-the others (R2, S3 Tables, Glue, Unity, Horizon) read their credentials from
-environment variables (GitHub Actions secrets).
+Every catalog runs on DuckDB 1.5.5, with the iceberg extension from core_nightly.
+OneLake authenticates via OIDC federation; the others (R2, S3 Tables, Glue, Unity,
+Horizon) read their credentials from environment variables (GitHub Actions secrets).
 """
 
 import os
@@ -27,39 +27,35 @@ def _onelake_token():
 def connect_catalog(cat):
     """Return a fresh DuckDB connection with catalog `cat` attached as `cat_db`."""
     con = duckdb.connect()  # fresh, isolated state every call
-    con.sql("INSTALL iceberg; LOAD iceberg;")
+    # core_nightly, not core: OneLake's vended SAS needs duckdb-iceberg#1331
+    # (merged 2026-08-19), and the newest core build is v1.5.5 from 2026-07-22.
+    con.sql("FORCE INSTALL iceberg FROM core_nightly; LOAD iceberg;")
 
     match cat:
-        case "onelake":  # Microsoft Fabric OneLake
-            token = _onelake_token()  # one token for both the catalog API and storage
+        case "onelake":  # Microsoft Fabric OneLake (managed storage, vended creds)
+            token = _onelake_token()  # authenticates the catalog API only
             con.sql("INSTALL azure; LOAD azure;")
+            # The azure extension only probes for a system CA bundle inside
+            # CreateCurlTransport, which is reached only on the curl transport.
+            con.sql("SET azure_transport_option_type = 'curl';")
+            # No ACCESS_DELEGATION_MODE and no storage credential of our own:
+            # vended credentials is the default, and OneLake vends a per-table
+            # SAS like unity/horizon. Needs duckdb-iceberg#1331 for the
+            # EndpointSuffix — see the FORCE INSTALL above.
+            #
+            # Caveat, being fixed on the OneLake side: createTable vends
+            # nothing, so a CREATE TABLE AS SELECT writes its parquet
+            # unauthenticated and 401s. loadTable does vend a writable SAS, so
+            # create the table first and INSERT/MERGE into it — see
+            # CREATE_THEN_INSERT in main.py.
             con.sql(f"""
                 ATTACH OR REPLACE '{ONELAKE_WAREHOUSE}' AS cat_db (
                     TYPE iceberg,
                     ENDPOINT '{ONELAKE_ENDPOINT}',
                     TOKEN '{token}',
-                    ACCESS_DELEGATION_MODE 'none',
                     STAGE_CREATE_TABLES false,
                     SKIP_CREATE_TABLE_METADATA_UPDATES true,
                     DEFAULT_SCHEMA dbo
-                );
-            """)
-            # Storage credential so DuckDB can write the parquet data files to
-            # OneLake. The ATTACH TOKEN above only authenticates the catalog API.
-            #
-            # Why not ACCESS_DELEGATION_MODE 'vended_credentials' like unity and
-            # horizon? OneLake does vend a per-table SAS, and reads over it work
-            # since duckdb-iceberg#1331 fixed the missing EndpointSuffix (without
-            # it the Azure SDK resolved onelake.dfs.core.windows.net). But the
-            # vended SAS will not write: tried on 2026-08-20, CREATE TABLE fails
-            # 'Unauthorized' opening .../Tables/demo/simple/data/<uuid>.parquet
-            # with the host and path both correct. So this harness keeps its own
-            # storage token, which does write.
-            con.sql(f"""
-                CREATE OR REPLACE SECRET onelake_storage (
-                    TYPE azure,
-                    PROVIDER access_token,
-                    ACCESS_TOKEN '{token}'
                 );
             """)
 

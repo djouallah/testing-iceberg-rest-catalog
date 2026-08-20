@@ -2,7 +2,7 @@
 
 | Catalog | Status | Notes |
 | --- | :---: | --- |
-| Microsoft OneLake | ✅ | private preview; needs `ACCESS_DELEGATION_MODE 'none'` and your own storage token — the vended SAS reads but does not write (see below) |
+| Microsoft OneLake | ✅ | private preview; credential vending, no storage credential of your own — but `CREATE TABLE AS SELECT` does not work yet, create the table then insert/merge (see below) |
 | Cloudflare R2 | ✅ | |
 | AWS S3 Tables | ✅ | |
 | Databricks Unity (external storage) | ✅ | |
@@ -11,24 +11,32 @@
 | Google Lakehouse | ❓ | configuration not documented / not sure |
 | AWS Glue (SageMaker Lakehouse) | ✅ | needs `ENDPOINT_TYPE 'glue'`, `PURGE_REQUESTED false`, and an explicit table location — a generic `ENDPOINT` attach silently loses every commit (Glue 2xx-drops the unsupported `/transactions/commit` route) |
 
-### OneLake credential vending: reads yes, writes no
+### OneLake credential vending: everything except CTAS
 
-OneLake vends a per-table Azure SAS like the other managed services, so in principle it should
-attach with `ACCESS_DELEGATION_MODE 'vended_credentials'` and no storage credential of your own.
-Two things were in the way, and only one is fixed:
+OneLake vends a per-table Azure SAS like the other managed services, so it attaches with no
+storage credential of your own — no `ACCESS_DELEGATION_MODE` at all, since vended credentials is
+the default. Your token authenticates the catalog API; the vended SAS covers the data files.
 
-- **Fixed.** duckdb-iceberg built the connection string from the vended `adls.sas-token.*` key
-  without an `EndpointSuffix`, so the Azure SDK fell back to `core.windows.net` and resolved
-  OneLake tables to `onelake.dfs.core.windows.net`. Every vended access failed.
-  [duckdb-iceberg#1331](https://github.com/duckdb/duckdb-iceberg/pull/1331), merged into
-  `v1.5-variegata` on 2026-08-19, takes the suffix from the same key. Reads then work.
-- **Not fixed.** The vended SAS still will not write. Tried on 2026-08-20: `CREATE TABLE` fails
-  `Unauthorized` opening `.../Tables/demo/simple/data/<uuid>.parquet`, with the host and the path
-  both correct — so this is OneLake declining the write, not a client-side URL problem.
+Two caveats:
 
-Hence `ACCESS_DELEGATION_MODE 'none'` plus an `onelake_storage` access-token secret. Since this
-table is a **write**-support matrix, that is the configuration it reports on. Flip the mode back
-to `'vended_credentials'` to retest once OneLake vends a writable SAS.
+- **Needs [duckdb-iceberg#1331](https://github.com/duckdb/duckdb-iceberg/pull/1331)**, merged into
+  `v1.5-variegata` on 2026-08-19. Before it, the connection string built from the vended
+  `adls.sas-token.*` key carried no `EndpointSuffix`, so the Azure SDK fell back to
+  `core.windows.net` and resolved OneLake tables to `onelake.dfs.core.windows.net` — every vended
+  access failed. The fix is not in the `core` extension repo yet (newest core build is v1.5.5,
+  released a month before the merge), so [catalogs.py](catalogs.py) does
+  `FORCE INSTALL iceberg FROM core_nightly`.
+- **`CREATE TABLE AS SELECT` does not work.** OneLake vends nothing on `createTable`, so the CTAS
+  writes its parquet unauthenticated and fails `Unauthorized` on
+  `.../Tables/demo/simple/data/<uuid>.parquet`. `loadTable` *does* vend a writable SAS, so the
+  workaround is to create the table first and then `INSERT` / `MERGE` into it — see
+  `CREATE_THEN_INSERT` in [main.py](main.py). OneLake is fixing the vend on `createTable`; drop the
+  workaround once it lands.
+
+The dbt target in [dbt/profiles.yml](dbt/profiles.yml) is the exception: dbt-duckdb materializes
+tables with a CTAS and offers no hook to split it, so that target stays on
+`ACCESS_DELEGATION_MODE 'none'` plus an `onelake_storage` access-token secret until the vend on
+`createTable` lands.
 
 ## A real dbt project, verbatim
 

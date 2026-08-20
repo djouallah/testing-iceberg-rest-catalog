@@ -34,6 +34,11 @@ aemo_electricity:
           options:
             endpoint: 'https://onelake.table.fabric.microsoft.com/iceberg'
             token: "{{ env_var('ONELAKE_TOKEN') }}"
+            # catalogs.py uses credential vending here; this target cannot.
+            # OneLake vends nothing on createTable, so a CTAS writes its parquet
+            # unauthenticated and 401s — and dbt-duckdb materializes tables with
+            # a CTAS, with no hook to split it into CREATE + INSERT. So keep our
+            # own storage token until OneLake vends on createTable.
             access_delegation_mode: 'none'
             stage_create_tables: 0
             skip_create_table_metadata_updates: 1

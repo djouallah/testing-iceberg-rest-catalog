@@ -16,16 +16,30 @@ URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
 # Known-broken catalogs: reported ERROR but don't fail the CI job.
 EXPECTED_FAILURES = {"unity_managed"}
 
+# Catalogs that cannot take a CTAS. OneLake IRC vends no credentials on
+# createTable, so the data write goes out unauthenticated and 401s; loadTable
+# does vend a writable SAS, so an empty CREATE followed by INSERT works. Drop
+# this once OneLake vends on createTable.
+CREATE_THEN_INSERT = {"onelake"}
+
 
 def write_demo(cat):
     con = connect_catalog(cat)
+    limit = " LIMIT 0" if cat in CREATE_THEN_INSERT else ""
     con.sql(f"""
         CREATE SCHEMA IF NOT EXISTS cat_db.{DB};
         USE cat_db.{DB};
         DROP TABLE IF EXISTS {TBL};
         CREATE TABLE {TBL} {table_clause(cat, TBL)} AS
-            SELECT * FROM read_csv_auto('{URL}', normalize_names=true);
+            SELECT * FROM read_csv_auto('{URL}', normalize_names=true){limit};
     """)
+    if cat in CREATE_THEN_INSERT:
+        # BY NAME so this doesn't rely on the catalog round-tripping CTAS
+        # column order.
+        con.sql(f"""
+            INSERT INTO {TBL} BY NAME
+                SELECT * FROM read_csv_auto('{URL}', normalize_names=true);
+        """)
     n = con.sql(f"SELECT count(*) FROM cat_db.{DB}.{TBL}").fetchone()[0]
     con.close()
     if not n:

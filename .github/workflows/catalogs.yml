@@ -83,6 +83,9 @@ jobs:
         env:
           CATALOGS: ${{ matrix.catalog }}
           DEBUG: ${{ inputs.debug && '1' || '0' }}
+          # The var the azure extension's curl transport reads for its CA
+          # bundle — not SSL_CERT_FILE or CURL_CA_BUNDLE.
+          CURL_CA_INFO: /etc/ssl/certs/ca-certificates.crt
           ENDPOINT_R2: ${{ secrets.ENDPOINT_R2 }}
           TOKEN_R2: ${{ secrets.TOKEN_R2 }}
           R2_WAREHOUSE: ${{ secrets.R2_WAREHOUSE }}
