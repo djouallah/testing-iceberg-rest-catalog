@@ -1,4 +1,9 @@
-# Iceberg REST catalog write support (DuckDB)
+# Iceberg REST catalog write support
+
+Two engines write the same demo table to the same catalogs, so a failure can be attributed:
+a ❌ under both is a catalog gap, a ❌ under one is a client gap.
+
+## DuckDB
 
 | Catalog | Status | Notes |
 | --- | :---: | --- |
@@ -38,9 +43,37 @@ tables with a CTAS and offers no hook to split it, so that target stays on
 `ACCESS_DELEGATION_MODE 'none'` plus an `onelake_storage` access-token secret until the vend on
 `createTable` lands.
 
+## Spark
+
+PySpark 4.1 + `iceberg-spark-runtime-4.1_2.13:1.11.0`, run by the
+[spark-catalogs](.github/workflows/spark-catalogs.yml) workflow. Same seven catalogs, same
+credentials, writing `demo.spark_simple` — a distinct table so the two workflows can never race
+each other. Not 4.2, despite Spark 4.2.0 having shipped: Iceberg builds a dedicated runtime per
+Spark *minor*, and 4.1 is the newest one with a runtime.
+
+| Catalog | Status | Notes |
+| --- | :---: | --- |
+| Microsoft OneLake | ❓ | not yet run |
+| Cloudflare R2 | ❓ | not yet run |
+| AWS S3 Tables | ❓ | not yet run |
+| Databricks Unity (external storage) | ❓ | not yet run |
+| Snowflake Horizon (managed storage) | ❓ | not yet run |
+| Databricks Unity (managed storage) | ❓ | not yet run |
+| AWS Glue (SageMaker Lakehouse) | ❓ | not yet run |
+
+Two translations are worth noting, since Spark has no equivalent of DuckDB's `ENDPOINT_TYPE`:
+S3 Tables and Glue are reached through their own Iceberg REST endpoints
+(`s3tables.<region>.amazonaws.com/iceberg`, `glue.<region>.amazonaws.com/iceberg`) with SigV4
+signing. For Glue that is the same finding as `ENDPOINT_TYPE 'glue'` in a different shape — the
+dedicated route commits per table, the generic one does not.
+
+`CREATE_THEN_INSERT` in [spark_main.py](spark_main.py) starts out holding `onelake`, mirroring
+DuckDB — but as a hypothesis, not a finding. If Spark's CTAS succeeds there, the gap is
+duckdb-iceberg's rather than OneLake's and the section above needs rewriting.
+
 ## A real dbt project, verbatim
 
-The table above is a single-table smoke test. The stronger claim: the full
+The tables above are single-table smoke tests. The stronger claim: the full
 [fabric-dbt-benchmark](https://github.com/djouallah/fabric-dbt-benchmark) dbt project —
 staging, dimensions, incremental fact merges, data tests — runs **unchanged** against each
 managed IRC service (the catalog provides the storage too). Nothing is forked or patched:

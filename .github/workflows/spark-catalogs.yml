@@ -1,0 +1,113 @@
+name: spark-catalogs
+
+# The Spark half of the write-support matrix — same seven catalogs as
+# catalogs.yml, same demo write, via PySpark + iceberg-spark-runtime instead of
+# DuckDB. Writes demo.spark_simple, so it can never race the DuckDB workflow's
+# demo.simple. Dispatch only: Spark adds JVM startup and Maven resolution, too
+# slow to run on every push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Catalog to run
+        type: choice
+        default: all
+        options:
+          - all
+          - onelake
+          - r2
+          - s3_table
+          - glue
+          - unity
+          - unity_managed
+          - horizon
+      debug:
+        description: Print error details (may leak vended tokens)
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write   # required for OneLake OIDC federation
+  contents: read
+
+jobs:
+  # Turn the dispatch choice into the matrix list.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      catalogs: ${{ steps.pick.outputs.catalogs }}
+    steps:
+      - id: pick
+        run: |
+          target="${{ inputs.target }}"
+          [ -z "$target" ] && target="all"
+          if [ "$target" = "all" ]; then
+            echo 'catalogs=["onelake","r2","s3_table","glue","unity","unity_managed","horizon"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "catalogs=[\"$target\"]" >> "$GITHUB_OUTPUT"
+          fi
+
+  # One job per selected catalog — re-run any single one.
+  catalog:
+    needs: setup
+    if: ${{ needs.setup.outputs.catalogs != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: ${{ matrix.catalog }}
+    strategy:
+      fail-fast: false
+      matrix:
+        catalog: ${{ fromJSON(needs.setup.outputs.catalogs) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC federation)
+        if: matrix.catalog == 'onelake'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      # Spark 4.1 runs on Java 17 or 21.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install -r requirements-spark.txt
+
+      # The three Iceberg bundles are large and Ivy re-resolves them per job;
+      # cache them on the package pins, which live in spark_catalogs.py.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.ivy2
+          key: ivy-${{ hashFiles('spark_catalogs.py') }}
+
+      # No CA-bundle symlink here (unlike catalogs.yml): that exists for DuckDB's
+      # azure extension, and the JVM uses its own truststore.
+      - run: python spark_main.py
+        env:
+          CATALOGS: ${{ matrix.catalog }}
+          DEBUG: ${{ inputs.debug && '1' || '0' }}
+          ENDPOINT_R2: ${{ secrets.ENDPOINT_R2 }}
+          TOKEN_R2: ${{ secrets.TOKEN_R2 }}
+          R2_WAREHOUSE: ${{ secrets.R2_WAREHOUSE }}
+          TABLEBUCKETARN: ${{ secrets.TABLEBUCKETARN }}
+          GLUE_WAREHOUSE: ${{ secrets.GLUE_WAREHOUSE }}
+          GLUE_REGION: ${{ secrets.GLUE_REGION }}
+          GLUE_LOCATION: ${{ secrets.GLUE_LOCATION }}
+          UC_ENDPOINT: ${{ secrets.UC_ENDPOINT }}
+          UC_TOKEN: ${{ secrets.UC_TOKEN }}
+          HORIZON_TOKEN: ${{ secrets.HORIZON_TOKEN }}
+          HORIZON_ENDPOINT: ${{ secrets.HORIZON_ENDPOINT }}
+          # s3_table and glue sign with SigV4 and read the vended data through
+          # S3FileIO; both take credentials from the default AWS chain, so the
+          # S3_KEY / S3_SECRET secrets go in under the names it looks for.
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET }}

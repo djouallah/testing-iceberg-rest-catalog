@@ -1,0 +1,10 @@
+# Spark CI only — the DuckDB workflow keeps requirements.txt.
+#
+# 4.1, not 4.2, even though Spark 4.2.0 shipped: Iceberg builds a dedicated
+# runtime per Spark minor (each under /spark/vX.Y, linking Spark internals), so
+# there is no forward compatibility across minors and no
+# iceberg-spark-runtime-4.2 artifact at any version. 4.1 is the newest Spark
+# with a runtime, and Iceberg 1.11.0 made it the default build target. The
+# matching jar pins live in PACKAGES in spark_catalogs.py.
+pyspark==4.1.3
+azure-identity

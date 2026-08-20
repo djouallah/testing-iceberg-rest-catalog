@@ -6,7 +6,6 @@ Horizon) read their credentials from environment variables (GitHub Actions secre
 """
 
 import os
-import duckdb
 
 # --- OneLake (Microsoft Fabric) ---------------------------------------------
 ONELAKE_WAREHOUSE = "1c52481c-0523-4a5a-bbde-fdc932bd77c2/ac303243-4441-4885-9e7d-f4f5e7af194c"
@@ -17,8 +16,8 @@ STORAGE_SCOPE = "https://storage.azure.com/.default"
 S3_TABLES_REGION = "ap-southeast-2"
 
 
-def _onelake_token():
-    """Storage token via OIDC federation."""
+def onelake_token():
+    """Storage token via OIDC federation. Shared with spark_catalogs.py."""
     from azure.identity import DefaultAzureCredential
 
     return DefaultAzureCredential().get_token(STORAGE_SCOPE).token
@@ -26,6 +25,10 @@ def _onelake_token():
 
 def connect_catalog(cat):
     """Return a fresh DuckDB connection with catalog `cat` attached as `cat_db`."""
+    # Imported here, not at module scope: spark_catalogs.py imports the OneLake
+    # constants and onelake_token() from this module and has no duckdb.
+    import duckdb
+
     con = duckdb.connect()  # fresh, isolated state every call
     # core_nightly, not core: OneLake's vended SAS needs duckdb-iceberg#1331.
     # curl transport: the azure extension only probes for a system CA bundle
@@ -38,7 +41,7 @@ def connect_catalog(cat):
 
     match cat:
         case "onelake":  # Microsoft Fabric OneLake (managed storage, vended creds)
-            token = _onelake_token()  # authenticates the catalog API only
+            token = onelake_token()  # authenticates the catalog API only
             con.sql(f"""
                 ATTACH OR REPLACE '{ONELAKE_WAREHOUSE}' AS cat_db (
                     TYPE iceberg,
