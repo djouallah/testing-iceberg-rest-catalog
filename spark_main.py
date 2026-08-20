@@ -15,6 +15,7 @@ import re
 import tempfile
 import urllib.request
 
+from catalogs import error_label
 from spark_catalogs import catalog_name, location_clause, spark_session
 
 DB = "demo"
@@ -87,7 +88,7 @@ def main():
             # Set DEBUG=1 (workflow_dispatch `debug` input) to see them.
             if os.environ.get("DEBUG") == "1":
                 print(f"--- {cat} ---\n{e}\n")
-            results.append((cat, "ERROR", ""))
+            results.append((cat, "ERROR", error_label(e)))
     spark.stop()
 
     width = max(len(c) for c, _, _ in results)

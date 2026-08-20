@@ -6,6 +6,7 @@ Horizon) read their credentials from environment variables (GitHub Actions secre
 """
 
 import os
+import re
 
 # --- OneLake (Microsoft Fabric) ---------------------------------------------
 ONELAKE_WAREHOUSE = "1c52481c-0523-4a5a-bbde-fdc932bd77c2/ac303243-4441-4885-9e7d-f4f5e7af194c"
@@ -14,6 +15,24 @@ STORAGE_SCOPE = "https://storage.azure.com/.default"
 
 # --- S3 Tables (AWS) --------------------------------------------------------
 S3_TABLES_REGION = "ap-southeast-2"
+
+# A fully-qualified Java exception class, e.g.
+# org.apache.iceberg.exceptions.ForbiddenException. Matches the class name only,
+# never the surrounding message.
+_JAVA_EXC = re.compile(r"\b((?:[a-z]\w*\.){2,}[A-Z]\w*(?:Exception|Error))\b")
+
+
+def error_label(e):
+    """Name the failure without quoting it.
+
+    These logs are public and Iceberg error messages can carry vended SAS
+    tokens and presigned URLs, so the report gets a class name and nothing
+    else — enough to tell a config bug from a catalog gap. Full text stays
+    behind DEBUG=1. Spark buries the real failure inside a Py4JJavaError, whose
+    own class name says nothing, so dig out the first Java class it names.
+    """
+    match = _JAVA_EXC.search(str(e))
+    return match.group(1).rsplit(".", 1)[-1] if match else type(e).__name__
 
 
 def onelake_token():

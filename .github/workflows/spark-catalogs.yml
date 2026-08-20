@@ -71,7 +71,7 @@ jobs:
           allow-no-subscriptions: true
 
       # Spark 4.1 runs on Java 17 or 21.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'

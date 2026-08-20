@@ -7,7 +7,7 @@ fails. Error details are hidden unless DEBUG=1 (avoid leaking secrets).
 
 import os
 
-from catalogs import connect_catalog, table_clause
+from catalogs import connect_catalog, error_label, table_clause
 
 DB = "demo"
 TBL = "simple"
@@ -61,7 +61,7 @@ def main():
             # Set DEBUG=1 (workflow_dispatch `debug` input) to see them.
             if os.environ.get("DEBUG") == "1":
                 print(f"--- {cat} ---\n{e}\n")
-            results.append((cat, "ERROR", ""))
+            results.append((cat, "ERROR", error_label(e)))
 
     width = max(len(c) for c, _, _ in results)
     print()
