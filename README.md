@@ -56,8 +56,8 @@ Spark *minor*, and 4.1 is the newest one with a runtime.
 | AWS S3 Tables | ✅ | no CTAS — `CREATE TABLE` then `INSERT` (see below) |
 | Databricks Unity (external storage) | ✅ | |
 | Snowflake Horizon (managed storage) | ✅ | no CTAS; `credential` takes the token bare, the role rides on `scope` |
-| Microsoft OneLake | ❌ | `BadRequestException` on create — unresolved |
-| AWS Glue (SageMaker Lakehouse) | ❌ | `BadRequestException` — unresolved |
+| Microsoft OneLake | ❌ | `BadRequestException` on create — the endpoint documents no metadata-write support yet |
+| AWS Glue (SageMaker Lakehouse) | ❌ | `BadRequestException` — unresolved, `warehouse` format suspected |
 
 Every ✅ writes the same 176 rows DuckDB does.
 
@@ -85,6 +85,21 @@ This is the same boundary DuckDB hits from the other side: `CREATE_THEN_INSERT` 
 `onelake`, `s3_table` and `horizon` — exactly the catalogs [catalogs.py](catalogs.py) gives
 `STAGE_CREATE_TABLES false`. Two engines, two mechanisms, one line: managed storage will not take
 a location from the client.
+
+### The two Spark can't reach
+
+Neither is explained away — both still fail, and the notes below are where the search stopped,
+not a conclusion.
+
+- **OneLake.** Microsoft documents that metadata write operations aren't supported by the OneLake
+  table API endpoint yet. That fits the shape of the DuckDB config, which only gets through with
+  `SKIP_CREATE_TABLE_METADATA_UPDATES true` — a duckdb-iceberg flag with no Spark equivalent. If
+  that is the whole story, this is the sharpest result in the repo: OneLake's write support is
+  currently reachable only from a client that can be told to skip the calls it doesn't implement.
+- **Glue.** The Glue REST endpoint wants `warehouse` set to the AWS **account id**, or
+  `accountId:catalog1/catalog2` for a nested catalog — which is not necessarily what
+  `GLUE_WAREHOUSE` holds, since that secret was written for DuckDB's `ENDPOINT_TYPE 'glue'`.
+  Worth checking before looking anywhere else.
 
 ## A real dbt project, verbatim
 
