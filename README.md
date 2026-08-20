@@ -2,7 +2,7 @@
 
 | Catalog | Status | Notes |
 | --- | :---: | --- |
-| Microsoft OneLake | ✅ | private preview |
+| Microsoft OneLake | ✅ | private preview; vends a per-table SAS, so no storage credential of your own — needs [duckdb-iceberg#1331](https://github.com/duckdb/duckdb-iceberg/pull/1331), without which the vended connection string has no `EndpointSuffix` and the Azure SDK resolves `onelake.dfs.core.windows.net` |
 | Cloudflare R2 | ✅ | |
 | AWS S3 Tables | ✅ | |
 | Databricks Unity (external storage) | ✅ | |

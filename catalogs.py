@@ -30,27 +30,24 @@ def connect_catalog(cat):
     con.sql("INSTALL iceberg; LOAD iceberg;")
 
     match cat:
-        case "onelake":  # Microsoft Fabric OneLake
-            token = _onelake_token()  # one token for both the catalog API and storage
+        case "onelake":  # Microsoft Fabric OneLake (managed storage, vended creds)
+            token = _onelake_token()  # authenticates the catalog API only
             con.sql("INSTALL azure; LOAD azure;")
+            # OneLake vends a per-table Azure SAS, so no storage credential of our
+            # own is needed — same as unity/horizon below. This was
+            # ACCESS_DELEGATION_MODE 'none' plus an onelake_storage access-token
+            # secret until duckdb-iceberg#1331: the vended connection string
+            # carried no EndpointSuffix, so the Azure SDK resolved
+            # onelake.dfs.core.windows.net and every data-file access failed.
             con.sql(f"""
                 ATTACH OR REPLACE '{ONELAKE_WAREHOUSE}' AS cat_db (
                     TYPE iceberg,
                     ENDPOINT '{ONELAKE_ENDPOINT}',
                     TOKEN '{token}',
-                    ACCESS_DELEGATION_MODE 'none',
+                    ACCESS_DELEGATION_MODE 'vended_credentials',
                     STAGE_CREATE_TABLES false,
                     SKIP_CREATE_TABLE_METADATA_UPDATES true,
                     DEFAULT_SCHEMA dbo
-                );
-            """)
-            # Storage credential so DuckDB can write the parquet data files to
-            # OneLake. The ATTACH TOKEN above only authenticates the catalog API.
-            con.sql(f"""
-                CREATE OR REPLACE SECRET onelake_storage (
-                    TYPE azure,
-                    PROVIDER access_token,
-                    ACCESS_TOKEN '{token}'
                 );
             """)
 
