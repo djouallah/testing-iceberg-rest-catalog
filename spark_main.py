@@ -25,11 +25,17 @@ URL = "https://data.wa.aemo.com.au/datafiles/post-facilities/facilities.csv"
 # Known-broken catalogs: reported ERROR but don't fail the CI job.
 EXPECTED_FAILURES = {"unity_managed"}
 
-# Catalogs that cannot take a CTAS. Carried over from main.py as a hypothesis to
-# test, not an established fact: OneLake vends no credentials on createTable for
-# DuckDB, and if Spark hits the same wall the gap is catalog-side. If a plain
-# CTAS works here, drop onelake from this set and revisit the README claim.
-CREATE_THEN_INSERT = {"onelake"}
+# Catalogs that cannot take a CTAS — exactly the managed-storage ones, which is
+# also exactly the set catalogs.py gives STAGE_CREATE_TABLES false. Spark's CTAS
+# stages the table first, and a staged create carries a location the catalog did
+# not choose:
+#   Snowflake documents both halves outright — "You can't specify a base location
+#   with your CREATE TABLE statement" and "CREATE TABLE AS SELECT (CTAS) from an
+#   external engine is not supported" — and Horizon rejects it with
+#   BadRequestException: Malformed request: Setting table location is not allowed.
+#   OneLake refuses for its own reason: it vends no credentials on createTable.
+# So these get a real CREATE TABLE with a column list, then an INSERT.
+CREATE_THEN_INSERT = {"onelake", "s3_table", "horizon"}
 
 
 def _load_source(spark):
@@ -57,8 +63,10 @@ def write_demo(spark, src, cat, config_errors):
     where = f"{name}.{DB}.{TBL}"
     loc = location_clause(cat, TBL)
     if cat in CREATE_THEN_INSERT:
-        # Empty CREATE, then INSERT: createTable vends nothing, loadTable does.
-        spark.sql(f"CREATE TABLE {where} {loc} AS SELECT * FROM src WHERE 1 = 0")
+        # A column list, not `AS SELECT ... WHERE 1 = 0` — that is still a CTAS
+        # and would be refused for the same reason.
+        cols = ", ".join(f"{f.name} {f.dataType.simpleString()}" for f in src.schema.fields)
+        spark.sql(f"CREATE TABLE {where} ({cols}) USING iceberg {loc}")
         # BY NAME so this doesn't rely on the catalog round-tripping column order.
         spark.sql(f"INSERT INTO {where} BY NAME SELECT * FROM src")
     else:

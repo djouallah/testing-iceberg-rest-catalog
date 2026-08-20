@@ -89,6 +89,8 @@ def catalog_options(cat):
                 "rest.signing-region": S3_TABLES_REGION,
                 "client.region": S3_TABLES_REGION,
                 "io-impl": S3_IO,
+                # The AWS endpoints don't implement the scan-metrics route.
+                "rest-metrics-reporting-enabled": "false",
             }
 
         case "glue":  # AWS Glue Data Catalog / SageMaker Lakehouse
@@ -105,6 +107,7 @@ def catalog_options(cat):
                 "rest.signing-region": region,
                 "client.region": region,
                 "io-impl": S3_IO,
+                "rest-metrics-reporting-enabled": "false",
             }
 
         case "unity":  # Databricks Unity Catalog (external storage, vended creds)
@@ -124,14 +127,14 @@ def catalog_options(cat):
             }
 
         case "horizon":  # Snowflake Horizon (managed storage)
-            ep = os.environ["HORIZON_ENDPOINT"]
+            # Snowflake's own Spark example passes the token bare and lets scope
+            # carry the role — no oauth2-server-uri, no client_credentials
+            # exchange. The "client_id:client_secret" credential that catalogs.py
+            # builds is the Open Catalog / Polaris form, not this one.
             return {
-                "uri": ep,
+                "uri": os.environ["HORIZON_ENDPOINT"],
                 "warehouse": "ICEBERG",
-                # One client_id:client_secret string. catalogs.py uses an empty
-                # client id, so this is just ":" + the token.
-                "credential": f":{os.environ['HORIZON_TOKEN']}",
-                "oauth2-server-uri": f"{ep}/v1/oauth/tokens",
+                "credential": os.environ["HORIZON_TOKEN"],
                 "scope": "session:role:DATA_ENGINEER",
                 "header.X-Iceberg-Access-Delegation": VENDED,
             }
