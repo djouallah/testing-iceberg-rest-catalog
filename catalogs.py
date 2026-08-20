@@ -27,27 +27,18 @@ def _onelake_token():
 def connect_catalog(cat):
     """Return a fresh DuckDB connection with catalog `cat` attached as `cat_db`."""
     con = duckdb.connect()  # fresh, isolated state every call
-    # core_nightly, not core: OneLake's vended SAS needs duckdb-iceberg#1331
-    # (merged 2026-08-19), and the newest core build is v1.5.5 from 2026-07-22.
-    con.sql("FORCE INSTALL iceberg FROM core_nightly; LOAD iceberg;")
+    # core_nightly, not core: OneLake's vended SAS needs duckdb-iceberg#1331.
+    # curl transport: the azure extension only probes for a system CA bundle
+    # inside CreateCurlTransport.
+    con.sql("""
+        FORCE INSTALL iceberg FROM core_nightly;
+        LOAD iceberg;
+        SET azure_transport_option_type = 'curl';
+    """)
 
     match cat:
         case "onelake":  # Microsoft Fabric OneLake (managed storage, vended creds)
             token = _onelake_token()  # authenticates the catalog API only
-            con.sql("INSTALL azure; LOAD azure;")
-            # The azure extension only probes for a system CA bundle inside
-            # CreateCurlTransport, which is reached only on the curl transport.
-            con.sql("SET azure_transport_option_type = 'curl';")
-            # No ACCESS_DELEGATION_MODE and no storage credential of our own:
-            # vended credentials is the default, and OneLake vends a per-table
-            # SAS like unity/horizon. Needs duckdb-iceberg#1331 for the
-            # EndpointSuffix — see the FORCE INSTALL above.
-            #
-            # Caveat, being fixed on the OneLake side: createTable vends
-            # nothing, so a CREATE TABLE AS SELECT writes its parquet
-            # unauthenticated and 401s. loadTable does vend a writable SAS, so
-            # create the table first and INSERT/MERGE into it — see
-            # CREATE_THEN_INSERT in main.py.
             con.sql(f"""
                 ATTACH OR REPLACE '{ONELAKE_WAREHOUSE}' AS cat_db (
                     TYPE iceberg,
